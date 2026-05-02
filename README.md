@@ -2,7 +2,9 @@
 
 OpenVPN-basierter NordVPN-Client für Enigma2-Receiver mit VTI-Image.
 
-Entwickelt und getestet auf einem **VU+ Uno 4K SE** mit VTI 15.0.04, Python 2.7.9 und OpenVPN 2.3.6.
+Entwickelt und getestet auf einer **VU+ Uno 4K SE** mit VTI 15.0.04, Python 2.7.9 und OpenVPN 2.3.6.
+
+Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 ---
 
