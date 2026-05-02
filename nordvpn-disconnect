@@ -1,0 +1,38 @@
+#!/bin/sh
+# NordVPN disconnect helper
+
+WATCHDOG_PID_FILE="/var/run/nordvpn-watchdog.pid"
+if [ -f "$WATCHDOG_PID_FILE" ]; then
+    kill "$(cat $WATCHDOG_PID_FILE 2>/dev/null)" 2>/dev/null || true
+    rm -f "$WATCHDOG_PID_FILE"
+fi
+
+RESOLV_BACKUP="/etc/resolv.conf.nordvpn.bak"
+if [ -f "$RESOLV_BACKUP" ]; then
+    cp "$RESOLV_BACKUP" /etc/resolv.conf
+    rm -f "$RESOLV_BACKUP"
+    echo "DNS restored"
+fi
+
+echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+echo 0 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+echo "IPv6 restored"
+
+PID_FILE="/var/run/openvpn.nordvpn.pid"
+
+if [ ! -f "$PID_FILE" ]; then
+    echo "Not connected"
+    exit 0
+fi
+
+PID=$(cat "$PID_FILE" 2>/dev/null)
+if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
+    kill "$PID" 2>/dev/null
+    sleep 1
+    if [ -d "/proc/$PID" ]; then
+        kill -9 "$PID" 2>/dev/null
+    fi
+fi
+
+rm -f "$PID_FILE"
+echo "Disconnected"

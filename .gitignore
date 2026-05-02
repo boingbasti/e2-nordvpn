@@ -1,0 +1,6 @@
+.claude/
+*.pyo
+*.pyc
+__pycache__/
+*.ipk
+*.zip

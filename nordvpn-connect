@@ -1,0 +1,183 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# NordVPN connect helper
+# Usage: nordvpn-connect <country_id> <protocol>
+
+import sys
+import os
+import urllib2
+import json
+import subprocess
+import time
+
+COUNTRY_ID  = int(sys.argv[1]) if len(sys.argv) > 1 else 81
+PROTO       = sys.argv[2] if len(sys.argv) > 2 else "udp"
+AUTH_FILE   = "/etc/openvpn/nordvpn_auth.txt"
+OVPN_CONFIG = "/etc/openvpn/nordvpn.conf"
+PID_FILE    = "/var/run/openvpn.nordvpn.pid"
+LOG_FILE    = "/var/log/nordvpn.log"
+SERVER_FILE = "/tmp/nordvpn_server.txt"
+API_BASE    = "https://api.nordvpn.com/v1"
+
+
+WATCHDOG_PID  = "/var/run/nordvpn-watchdog.pid"
+WATCHDOG_CMD  = "/usr/sbin/nordvpn-watchdog"
+RESOLV_CONF   = "/etc/resolv.conf"
+RESOLV_BACKUP = "/etc/resolv.conf.nordvpn.bak"
+NORDVPN_DNS   = ["103.86.96.100", "103.86.99.100"]
+
+
+def log(msg):
+    print msg
+    sys.stdout.flush()
+
+
+def _set_dns():
+    try:
+        import shutil
+        shutil.copy2(RESOLV_CONF, RESOLV_BACKUP)
+        with open(RESOLV_CONF, "w") as f:
+            f.write("# NordVPN\n")
+            for dns in NORDVPN_DNS:
+                f.write("nameserver %s\n" % dns)
+        log("DNS set to NordVPN (%s)" % ", ".join(NORDVPN_DNS))
+    except Exception as e:
+        log("WARNING: Could not set DNS: %s" % str(e))
+
+
+def _disable_ipv6():
+    try:
+        open("/proc/sys/net/ipv6/conf/all/disable_ipv6", "w").write("1\n")
+        open("/proc/sys/net/ipv6/conf/default/disable_ipv6", "w").write("1\n")
+        log("IPv6 disabled")
+    except Exception as e:
+        log("WARNING: Could not disable IPv6: %s" % str(e))
+
+
+def _restart_watchdog():
+    if os.path.isfile(WATCHDOG_PID):
+        try:
+            pid = int(open(WATCHDOG_PID).read().strip())
+            os.kill(pid, 15)
+            time.sleep(0.5)
+        except Exception:
+            pass
+    subprocess.Popen(["python", WATCHDOG_CMD])
+
+
+def stop_existing():
+    if not os.path.isfile(PID_FILE):
+        return
+    try:
+        pid = open(PID_FILE).read().strip()
+        if pid and os.path.isdir("/proc/%s" % pid):
+            log("Stopping existing connection...")
+            os.kill(int(pid), 15)
+            time.sleep(2)
+    except Exception:
+        pass
+    try:
+        os.remove(PID_FILE)
+    except Exception:
+        pass
+
+
+def fetch(url, timeout=15):
+    req = urllib2.urlopen(url, timeout=timeout)
+    return req.read()
+
+
+def get_best_server():
+    tech = "openvpn_%s" % PROTO
+    url = ("%s/servers/recommendations"
+           "?filters[country_id]=%d"
+           "&filters[servers_technologies][identifier]=%s"
+           "&limit=1") % (API_BASE, COUNTRY_ID, tech)
+    data = json.loads(fetch(url))
+    if not data:
+        return None
+    return data[0]["hostname"]
+
+
+def download_ovpn(hostname):
+    if PROTO == "udp":
+        url = ("https://downloads.nordcdn.com/configs/files/ovpn_udp"
+               "/servers/%s.udp.ovpn") % hostname
+    else:
+        url = ("https://downloads.nordcdn.com/configs/files/ovpn_tcp"
+               "/servers/%s.tcp.ovpn") % hostname
+    return fetch(url, timeout=30)
+
+
+def main():
+    if not os.path.isfile(AUTH_FILE) or os.path.getsize(AUTH_FILE) < 5:
+        log("ERROR: No credentials found at %s" % AUTH_FILE)
+        log("Please configure your NordVPN Service Credentials in the plugin settings.")
+        sys.exit(1)
+
+    stop_existing()
+
+    log("Fetching best server for country ID %d..." % COUNTRY_ID)
+    try:
+        server = get_best_server()
+    except Exception as e:
+        log("ERROR: NordVPN API unreachable (%s)" % str(e))
+        sys.exit(1)
+
+    if not server:
+        log("ERROR: No server found for country ID %d" % COUNTRY_ID)
+        sys.exit(1)
+
+    log("Connecting to: %s" % server)
+    open(SERVER_FILE, "w").write(server)
+
+    log("Downloading config...")
+    try:
+        ovpn = download_ovpn(server)
+    except Exception as e:
+        log("ERROR: Failed to download OpenVPN config (%s)" % str(e))
+        sys.exit(1)
+
+    # Strip directives we override so there are no duplicates
+    clean_lines = [
+        l for l in ovpn.splitlines()
+        if not l.strip().startswith("auth-user-pass")
+        and l.strip() != "auth-nocache"
+    ]
+    ovpn_clean = "\n".join(clean_lines)
+
+    config = ovpn_clean + (
+        "\nauth-user-pass %s"
+        "\nlog-append %s"
+        "\ntls-version-min 1.2"
+        "\ntls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384"
+        ":TLS-ECDHE-RSA-WITH-AES-256-CBC-SHA384"
+        ":TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256"
+        "\nauth-nocache"
+        "\nreplay-window 512 120\n"
+    ) % (AUTH_FILE, LOG_FILE)
+
+    with open(OVPN_CONFIG, "w") as f:
+        f.write(config)
+    os.chmod(OVPN_CONFIG, 0o600)
+
+    log("Starting OpenVPN...")
+    ret = subprocess.call([
+        "/usr/sbin/openvpn",
+        "--daemon",
+        "--writepid", PID_FILE,
+        "--config", OVPN_CONFIG,
+    ])
+
+    if ret == 0:
+        log("SUCCESS: OpenVPN started, connecting to %s" % server)
+        _disable_ipv6()
+        _set_dns()
+        _restart_watchdog()
+    else:
+        log("ERROR: OpenVPN failed to start (exit %d)" % ret)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

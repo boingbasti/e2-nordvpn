@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import os
+import sys
+import time
+import subprocess
+import ConfigParser
+
+PID_FILE    = "/var/run/openvpn.nordvpn.pid"
+CONNECT_CMD = "/usr/sbin/nordvpn-connect"
+CONFIG_FILE = "/etc/enigma2/nordvpn.conf"
+SELF_PID    = "/var/run/nordvpn-watchdog.pid"
+INTERVAL = 60
+
+
+def is_vpn_connected():
+    if not os.path.isfile(PID_FILE):
+        return False
+    try:
+        pid = open(PID_FILE).read().strip()
+        return bool(pid) and os.path.isdir("/proc/%s" % pid)
+    except Exception:
+        return False
+
+
+def read_config():
+    cfg = ConfigParser.SafeConfigParser()
+    cfg.read(CONFIG_FILE)
+    try:
+        country_id = cfg.get("nordvpn", "country_id")
+    except Exception:
+        country_id = "81"
+    try:
+        proto = cfg.get("nordvpn", "protocol")
+    except Exception:
+        proto = "udp"
+    return country_id, proto
+
+
+def main():
+    open(SELF_PID, "w").write(str(os.getpid()))
+    was_connected = False
+    while True:
+        time.sleep(INTERVAL)
+        connected = is_vpn_connected()
+        if connected:
+            was_connected = True
+            continue
+        if not was_connected:
+            continue
+        country_id, proto = read_config()
+        subprocess.Popen(["python", CONNECT_CMD, country_id, proto])
+
+
+if __name__ == "__main__":
+    main()
