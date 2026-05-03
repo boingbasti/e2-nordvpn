@@ -8,6 +8,21 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 ---
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="screenshots/MainScreen.png" width="420" alt="Hauptbildschirm (getrennt)"></td>
+    <td><img src="screenshots/Verbunden.png" width="420" alt="Hauptbildschirm (verbunden)"></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Settings.png" width="420" alt="Einstellungen"></td>
+    <td><img src="screenshots/Landauswahl.png" width="420" alt="Länderauswahl"></td>
+  </tr>
+</table>
+
+---
+
 ## Funktionen
 
 - Verbindung zum besten verfügbaren NordVPN-Server im gewählten Land
