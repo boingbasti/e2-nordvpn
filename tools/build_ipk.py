@@ -48,11 +48,13 @@ if [ -f /var/run/openvpn.nordvpn.pid ]; then
 fi
 rm -f /etc/openvpn/nordvpn_auth.txt
 rm -f /etc/openvpn/nordvpn.conf
-rm -f /etc/enigma2/nordvpn.conf
 rm -f /var/log/nordvpn.log
 rm -f /tmp/nordvpn_server.txt
 rm -f /tmp/nordvpn_countries.json
 rm -f /etc/resolv.conf.nordvpn.bak
+if [ "$1" != "upgrade" ]; then
+    rm -f /etc/enigma2/nordvpn.conf
+fi
 """
 
 
