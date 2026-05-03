@@ -44,7 +44,7 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 - Ein NordVPN-Konto mit **Service Credentials**
 
 > **Wichtig:** Es werden nicht die normalen Login-Daten benötigt, sondern die manuellen Service Credentials.  
-> Diese findest du unter: [nordvpn.com](https://nordvpn.com) → Mein Konto → Services → NordVPN → **Set up manually**
+> Diese findest du unter: [nordvpn.com](https://nordvpn.com) → Mein Konto → NordVPN → Manuelle Einrichtung → **Service-Anmeldedaten**
 
 ---
 

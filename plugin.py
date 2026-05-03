@@ -123,7 +123,7 @@ class NordVPNCredentials(Screen):
         self["info"] = Label(
             "Service Credentials eingeben\n"
             "(NICHT Login-Passwort / Access Token!)\n\n"
-            "nordvpn.com → Services → NordVPN → Set up manually"
+            "nordvpn.com - Mein Konto - NordVPN - Manuelle Einrichtung - Service-Anmeldedaten"
         )
         self["key_green"] = Label("Eingeben")
         self["key_red"]   = Label("Abbrechen")
@@ -174,12 +174,12 @@ class NordVPNCredentials(Screen):
 class NordVPNSettings(Screen):
     skin = """
         <screen position="center,center" size="800,560" title="NordVPN Einstellungen">
-            <widget name="list"    position="20,20"  size="760,390"
+            <widget name="list"     position="20,20"  size="760,480"
                     font="Regular;26" itemHeight="42" scrollbarMode="showOnDemand"/>
-            <widget name="hint"    position="20,428" size="760,76"
-                    font="Regular;20" foregroundColor="#888888"/>
-            <widget name="key_red" position="20,516" size="180,44"
+            <widget name="key_red"  position="20,516" size="180,44"
                     font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313"/>
+            <widget name="key_hint" position="210,516" size="570,44"
+                    font="Regular;22" valign="center" foregroundColor="#888888"/>
         </screen>
     """
 
@@ -190,12 +190,9 @@ class NordVPNSettings(Screen):
 
     def __init__(self, session):
         Screen.__init__(self, session)
-        self["list"]    = MenuList([])
-        self["hint"]    = Label(
-            "OK = Auswählen/Ändern   links/rechts = Protokoll/Autostart\n"
-            "Credentials: nordvpn.com → Services → NordVPN → Set up manually"
-        )
-        self["key_red"] = Label("Zurück")
+        self["list"]     = MenuList([])
+        self["key_red"]  = Label("Zurück")
+        self["key_hint"] = Label("OK = Ändern")
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions"],
             {
