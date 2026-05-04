@@ -65,13 +65,13 @@ class NordVPNCountryList(Screen):
             self._countries = []
             display = []
             if recent:
-                display.append("  -- Zuletzt gewaehlt --")
+                display.append("  -- Zuletzt gew\xc3\xa4hlt --")
                 self._countries.append(None)
                 for cid, cname in recent:
                     name = cname.encode("utf-8") if isinstance(cname, unicode) else cname
                     self._countries.append((name, cid))
                     display.append("  " + name)
-                display.append("  -- Alle Laender --")
+                display.append("  -- Alle L\xc3\xa4nder --")
                 self._countries.append(None)
             for item in all_countries:
                 self._countries.append(item)
@@ -80,7 +80,7 @@ class NordVPNCountryList(Screen):
         except Exception as e:
             self.session.open(
                 MessageBox,
-                "Laenderliste konnte nicht geladen werden:\n%s" % str(e),
+                "L\xc3\xa4nderliste konnte nicht geladen werden:\n%s" % str(e),
                 MessageBox.TYPE_ERROR,
                 timeout=5,
             )
@@ -160,11 +160,13 @@ class NordVPNCredentials(Screen):
     def _got_password(self, password):
         if password and password.strip():
             manager.save_credentials(self._username, password.strip())
-            self.session.open(
+            self.session.openWithCallback(
+                lambda *a: self.close(True),
                 MessageBox, "Zugangsdaten gespeichert.",
                 MessageBox.TYPE_INFO, timeout=3,
             )
-        self.close(True)
+        else:
+            self.close(True)
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +302,9 @@ class NordVPNMain(Screen):
         self._ip_container.appClosed.append(self._on_ip_done)
         self._log_buf = ""
         self._prev_connected = None
+        self._connecting = False
+        self._auth_timer = eTimer()
+        self._auth_timer.callback.append(self._check_auth)
 
         self["status_lbl"] = Label("")
         self["server_lbl"] = Label("")
@@ -335,7 +340,7 @@ class NordVPNMain(Screen):
         connected = manager.is_connected()
         if connected != self._prev_connected:
             if connected:
-                self._ip_timer.start(5000, True)
+                self._ip_timer.start(3000, True)
             else:
                 self._ip_timer.stop()
                 self["ip_lbl"].setText("")
@@ -379,15 +384,40 @@ class NordVPNMain(Screen):
         lines = self._log_buf.strip().splitlines()
         self["log_lbl"].setText("\n".join(lines[-6:]))
 
+    def _check_auth(self):
+        if not self._connecting:
+            return
+        self._connecting = False
+        try:
+            with open("/var/log/nordvpn.log") as f:
+                f.seek(self._log_pos)
+                new_log = f.read()
+        except Exception:
+            return
+        if "AUTH_FAILED" not in new_log:
+            return
+        lines = [l.split(" ", 4)[-1] for l in new_log.strip().splitlines() if l.strip()]
+        self._log_buf += "\n".join(lines[-4:])
+        self["log_lbl"].setText("\n".join(self._log_buf.strip().splitlines()[-6:]))
+        self.session.open(
+            MessageBox,
+            "Verbindung fehlgeschlagen: Zugangsdaten ungültig.",
+            MessageBox.TYPE_ERROR,
+            timeout=8,
+        )
+
     def _on_connect_done(self, retval):
         self._update_status()
         if retval != 0:
+            self._connecting = False
             self.session.open(
                 MessageBox,
                 "Fehler beim Verbinden:\n" + self._log_buf[-300:],
                 MessageBox.TYPE_ERROR,
                 timeout=8,
             )
+        else:
+            self._auth_timer.start(10000, True)
 
     def _on_disconnect_done(self, retval):
         self._update_status()
@@ -402,7 +432,18 @@ class NordVPNMain(Screen):
             )
             return
         if self._con_container.running():
+            self.session.open(
+                MessageBox,
+                "Verbindungsaufbau läuft bereits.",
+                MessageBox.TYPE_INFO,
+                timeout=3,
+            )
             return
+        self._connecting = True
+        try:
+            self._log_pos = os.path.getsize("/var/log/nordvpn.log")
+        except Exception:
+            self._log_pos = 0
         self._log_buf = ""
         self["log_lbl"].setText("Verbinde...")
         self["status_lbl"].setText("Verbinde...")

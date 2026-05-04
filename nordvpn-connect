@@ -62,7 +62,8 @@ def _restart_watchdog():
             time.sleep(0.5)
         except Exception:
             pass
-    subprocess.Popen(["python", WATCHDOG_CMD])
+    devnull = open(os.devnull, "w")
+    subprocess.Popen(["python", WATCHDOG_CMD], stdout=devnull, stderr=devnull)
 
 
 def stop_existing():
@@ -153,7 +154,6 @@ def main():
         "\ntls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384"
         ":TLS-ECDHE-RSA-WITH-AES-256-CBC-SHA384"
         ":TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256"
-        "\nauth-nocache"
         "\nreplay-window 512 120\n"
     ) % (AUTH_FILE, LOG_FILE)
 
