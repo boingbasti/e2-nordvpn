@@ -71,6 +71,9 @@ class NordVPNManager(object):
         self._set("autostart", "1" if enabled else "0")
 
     def save_credentials(self, username, password):
+        auth_dir = os.path.dirname(AUTH_FILE)
+        if not os.path.isdir(auth_dir):
+            os.makedirs(auth_dir)
         with open(AUTH_FILE, "w") as f:
             f.write("%s\n%s\n" % (username.strip(), password.strip()))
         os.chmod(AUTH_FILE, 0o600)
