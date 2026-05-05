@@ -6,7 +6,7 @@ import tarfile
 import io
 
 PLUGIN_NAME   = "enigma2-plugin-extensions-nordvpn"
-VERSION       = "1.2"
+VERSION       = "1.3"
 ARCHITECTURE  = "all"
 MAINTAINER    = "boingbasti"
 DESCRIPTION   = "NordVPN OpenVPN-Client fuer Enigma2"
