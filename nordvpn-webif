@@ -1,0 +1,154 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# nordvpn-webif - Temporaerer Webserver fuer Zugangsdaten-Eingabe
+
+import os
+import sys
+import signal
+import urllib
+import threading
+from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+
+PORT       = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+AUTH_FILE  = "/etc/openvpn/nordvpn_auth.txt"
+PID_FILE   = "/var/run/nordvpn-webif.pid"
+PLUGIN_PNG = "/usr/lib/enigma2/python/Plugins/Extensions/NordVPN/plugin.png"
+TIMEOUT    = 300
+
+HTML = u"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NordVPN Zugangsdaten</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: Arial, sans-serif; max-width: 420px; margin: 40px auto; padding: 20px; background: #f4f5f7; }
+h2 { color: #2d3250; margin-top: 8px; }
+.info { color: #555; font-size: 13px; background: #e8eaf0; border-left: 3px solid #4ecdc4; padding: 10px 12px; border-radius: 4px; margin-bottom: 20px; }
+label { font-weight: bold; display: block; margin-bottom: 4px; color: #2d3250; }
+input { width: 100%; padding: 10px; margin-bottom: 16px; border: 1px solid #c0c4d6; border-radius: 4px; font-size: 15px; background: #fff; }
+input:focus { outline: none; border-color: #4ecdc4; }
+button { width: 100%; padding: 12px; background: #2d3250; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+button:hover { background: #3d4470; }
+</style>
+</head>
+<body>
+<img src="/plugin.png" alt="NordVPN" style="display:block;margin:0 auto 16px;width:200px;height:auto;">
+<h2>NordVPN Zugangsdaten</h2>
+<div class="info">
+<strong>Service Credentials eingeben</strong><br>
+Nicht das normale Login-Passwort!<br>
+nordvpn.com &rarr; Mein Konto &rarr; NordVPN &rarr; Manuelle Einrichtung &rarr; Service-Anmeldedaten
+</div>
+<form method="POST">
+<label>Username:</label>
+<input type="text" name="username" value="__USERNAME__" autocomplete="off" autocorrect="off" autocapitalize="none">
+<label>Passwort:</label>
+<input type="password" name="password" autocomplete="new-password">
+<button type="submit">Speichern</button>
+</form>
+</body>
+</html>"""
+
+HTML_SUCCESS = u"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NordVPN</title>
+<style>body { font-family: Arial, sans-serif; max-width: 420px; margin: 40px auto; padding: 20px; background: #f4f5f7; } h2 { color: #2d3250; }</style>
+</head>
+<body>
+<img src="/plugin.png" alt="NordVPN" style="display:block;margin:0 auto 16px;width:200px;height:auto;">
+<h2>NordVPN Zugangsdaten</h2>
+<p style="color:#4ecdc4;font-size:18px;font-weight:bold;">&#10003; Zugangsdaten gespeichert!</p>
+<p>Dieses Fenster kann geschlossen werden.</p>
+</body>
+</html>"""
+
+
+def get_current_username():
+    try:
+        with open(AUTH_FILE) as f:
+            return f.readline().strip()
+    except Exception:
+        return ""
+
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        pass
+
+    def _send_html(self, html):
+        data = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        if self.path == "/plugin.png" and os.path.isfile(PLUGIN_PNG):
+            with open(PLUGIN_PNG, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        else:
+            self._send_html(HTML.replace("__USERNAME__", get_current_username()))
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        params = {}
+        for part in body.split("&"):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                params[k] = urllib.unquote_plus(v)
+
+        username = params.get("username", "").strip()
+        password = params.get("password", "").strip()
+
+        if username and password:
+            auth_dir = os.path.dirname(AUTH_FILE)
+            if not os.path.isdir(auth_dir):
+                os.makedirs(auth_dir)
+            with open(AUTH_FILE, "w") as f:
+                f.write("%s\n%s\n" % (username, password))
+            os.chmod(AUTH_FILE, 0o600)
+            self._send_html(HTML_SUCCESS)
+            threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+        else:
+            self._send_html(HTML.replace("__USERNAME__", get_current_username()))
+
+
+def cleanup(signum, frame):
+    try:
+        os.remove(PID_FILE)
+    except Exception:
+        pass
+    sys.exit(0)
+
+
+def main():
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()) + "\n")
+
+    signal.signal(signal.SIGTERM, cleanup)
+    signal.signal(signal.SIGINT,  cleanup)
+    signal.signal(signal.SIGALRM, cleanup)
+    signal.alarm(TIMEOUT)
+
+    server = HTTPServer(("", PORT), Handler)
+    try:
+        server.serve_forever()
+    except Exception:
+        pass
+    finally:
+        cleanup(None, None)
+
+
+if __name__ == "__main__":
+    main()

@@ -147,15 +147,17 @@ def main():
     ]
     ovpn_clean = "\n".join(clean_lines)
 
-    config = ovpn_clean + (
+    extra = (
         "\nauth-user-pass %s"
         "\nlog-append %s"
         "\ntls-version-min 1.2"
         "\ntls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384"
         ":TLS-ECDHE-RSA-WITH-AES-256-CBC-SHA384"
         ":TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256"
-        "\nreplay-window 512 120\n"
     ) % (AUTH_FILE, LOG_FILE)
+    if PROTO == "udp":
+        extra += "\nreplay-window 512 120"
+    config = ovpn_clean + extra + "\n"
 
     with open(OVPN_CONFIG, "w") as f:
         f.write(config)

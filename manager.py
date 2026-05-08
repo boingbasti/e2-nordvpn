@@ -9,8 +9,12 @@ PID_FILE = "/var/run/openvpn.nordvpn.pid"
 SERVER_FILE = "/tmp/nordvpn_server.txt"
 LOG_FILE = "/var/log/nordvpn.log"
 
-CONNECT_CMD = "/usr/sbin/nordvpn-connect"
+CONNECT_CMD    = "/usr/sbin/nordvpn-connect"
 DISCONNECT_CMD = "/usr/sbin/nordvpn-disconnect"
+
+WEBIF_PORT     = 8765
+WEBIF_PID_FILE = "/var/run/nordvpn-webif.pid"
+WEBIF_CMD      = "/usr/sbin/nordvpn-webif"
 
 
 class NordVPNManager(object):
@@ -126,6 +130,48 @@ class NordVPNManager(object):
         recent = [c for c in recent if c[0] != country_id]
         recent.insert(0, [country_id, country_name])
         self._set("recent_countries", json.dumps(recent[:5]))
+
+    def is_webif_running(self):
+        if not os.path.isfile(WEBIF_PID_FILE):
+            return False
+        try:
+            with open(WEBIF_PID_FILE) as f:
+                pid = f.read().strip()
+            return bool(pid) and os.path.isdir("/proc/%s" % pid)
+        except Exception:
+            return False
+
+    def get_box_ip(self):
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "?"
+
+    def get_webif_url(self):
+        return "http://%s:%d" % (self.get_box_ip(), WEBIF_PORT)
+
+    def start_webif(self):
+        import subprocess
+        devnull = open(os.devnull, "w")
+        subprocess.Popen(
+            ["python", WEBIF_CMD, str(WEBIF_PORT)],
+            stdout=devnull, stderr=devnull,
+        )
+
+    def stop_webif(self):
+        try:
+            if os.path.isfile(WEBIF_PID_FILE):
+                with open(WEBIF_PID_FILE) as f:
+                    pid = f.read().strip()
+                if pid:
+                    os.kill(int(pid), 15)
+        except Exception:
+            pass
 
     def get_connect_cmd(self):
         return "%s %d %s" % (

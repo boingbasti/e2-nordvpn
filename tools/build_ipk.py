@@ -6,7 +6,7 @@ import tarfile
 import io
 
 PLUGIN_NAME   = "enigma2-plugin-extensions-nordvpn"
-VERSION       = "1.3"
+VERSION       = "1.4"
 ARCHITECTURE  = "all"
 MAINTAINER    = "boingbasti"
 DESCRIPTION   = "NordVPN OpenVPN-Client fuer Enigma2"
@@ -20,7 +20,7 @@ OUTPUT_FILE = os.path.join(PROJECT_DIR, f"{PLUGIN_NAME}_{VERSION}_{ARCHITECTURE}
 
 PLUGIN_FILES = ["__init__.py", "plugin.py", "manager.py", "plugin.png"]
 SBIN_FILES   = ["nordvpn-connect", "nordvpn-disconnect",
-                "nordvpn-fetch-countries", "nordvpn-watchdog"]
+                "nordvpn-fetch-countries", "nordvpn-watchdog", "nordvpn-webif"]
 
 
 POSTINST_SCRIPT = """\
@@ -28,7 +28,8 @@ POSTINST_SCRIPT = """\
 chmod +x /usr/sbin/nordvpn-connect \\
          /usr/sbin/nordvpn-disconnect \\
          /usr/sbin/nordvpn-fetch-countries \\
-         /usr/sbin/nordvpn-watchdog
+         /usr/sbin/nordvpn-watchdog \\
+         /usr/sbin/nordvpn-webif
 WDOG_PID=/var/run/nordvpn-watchdog.pid
 if [ -f "$WDOG_PID" ] && [ -d "/proc/$(cat $WDOG_PID 2>/dev/null)" ]; then
     exit 0
@@ -46,11 +47,17 @@ if [ -f /var/run/openvpn.nordvpn.pid ]; then
     kill "$(cat /var/run/openvpn.nordvpn.pid 2>/dev/null)" 2>/dev/null || true
     rm -f /var/run/openvpn.nordvpn.pid
 fi
+if [ -f /var/run/nordvpn-webif.pid ]; then
+    kill "$(cat /var/run/nordvpn-webif.pid 2>/dev/null)" 2>/dev/null || true
+    rm -f /var/run/nordvpn-webif.pid
+fi
 rm -f /etc/openvpn/nordvpn_auth.txt
 rm -f /etc/openvpn/nordvpn.conf
 rm -f /var/log/nordvpn.log
 rm -f /tmp/nordvpn_server.txt
 rm -f /tmp/nordvpn_countries.json
+rm -f /tmp/nordvpn_session
+rm -f /tmp/nordvpn_extip.txt
 rm -f /etc/resolv.conf.nordvpn.bak
 if [ "$1" != "upgrade" ]; then
     rm -f /etc/enigma2/nordvpn.conf

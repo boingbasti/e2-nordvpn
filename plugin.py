@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
+VERSION = "1.4"
+
 import os
+import time
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
@@ -9,11 +12,15 @@ from Components.Label import Label
 from Components.MenuList import MenuList
 from Components.ConfigList import ConfigListScreen
 from Components.config import ConfigNothing, ConfigSelection, getConfigListEntry, NoSave
-# ConfigListScreen/config imports kept for potential future use
-from enigma import eConsoleAppContainer, eTimer
+from enigma import eConsoleAppContainer, eTimer, gRGB
+
+try:
+    from enigma import getDesktop as _getDesktop
+    IS_FHD = _getDesktop(0).size().width() > 1280
+except Exception:
+    IS_FHD = True
 
 from Tools.Notifications import AddPopup
-
 from Plugins.Extensions.NordVPN.manager import manager
 
 
@@ -22,30 +29,71 @@ from Plugins.Extensions.NordVPN.manager import manager
 # ---------------------------------------------------------------------------
 
 class NordVPNCountryList(Screen):
-    skin = """
-        <screen position="center,center" size="700,520" title="Land auswählen">
-            <widget name="list"       position="10,10"  size="680,450"
-                    font="Regular;26" itemHeight="42" scrollbarMode="showOnDemand"/>
-            <widget name="key_red"    position="10,468" size="200,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313"/>
-            <widget name="key_hint"   position="250,468" size="440,44"
-                    font="Regular;22" halign="center" valign="center" foregroundColor="#888888"/>
+
+    _SKIN_FHD = """
+        <screen position="0,0" size="1920,1080" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="320,180" size="1280,748" backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="320,180" size="1280,80"  backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="320,260" size="1280,3"   backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="320,836" size="1280,2"   backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="320,838" size="1280,90"  backgroundColor="#1A000000" zPosition="-4"/>
+            <widget name="title_lbl" position="340,188" size="900,64"
+                    font="Regular;40" valign="center" foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="list"      position="340,268" size="1200,560"
+                    font="Regular;34" itemHeight="54" scrollbarMode="showOnDemand"
+                    foregroundColor="#e0e0e0" backgroundColor="#33000000"
+                    transparent="1"/>
+            <eLabel position="340,856" size="8,54" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"   position="356,838" size="280,90"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <widget name="key_hint"  position="660,838" size="900,90"
+                    font="Regular;32" valign="center" foregroundColor="#888888" backgroundColor="#1A000000"
+                    transparent="1"/>
         </screen>
     """
+    _SKIN_HD = """
+        <screen position="0,0" size="1280,720" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1280,720"  backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="215,120" size="850,500"  backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="215,120" size="850,54"   backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="215,174" size="850,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="215,558" size="850,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="215,560" size="850,60"   backgroundColor="#1A000000" zPosition="-4"/>
+            <widget name="title_lbl" position="228,124" size="600,46"
+                    font="Regular;28" valign="center" foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="list"      position="228,180" size="814,372"
+                    font="Regular;26" itemHeight="42" scrollbarMode="showOnDemand"
+                    foregroundColor="#e0e0e0" backgroundColor="#33000000"
+                    transparent="1"/>
+            <eLabel position="228,575" size="5,30" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"   position="240,560" size="184,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <widget name="key_hint"  position="440,560" size="596,60"
+                    font="Regular;21" valign="center" foregroundColor="#888888" backgroundColor="#1A000000"
+                    transparent="1"/>
+        </screen>
+    """
+    skin = ""
 
     def __init__(self, session):
+        self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
         self._countries = []
 
-        self["list"] = MenuList([])
-        self["key_red"] = Label("Abbrechen")
-        self["key_hint"] = Label("OK = Auswählen")
-        self["actions"] = ActionMap(
+        self["title_lbl"] = Label("Land ausw\xc3\xa4hlen")
+        self["list"]     = MenuList([])
+        self["key_red"]  = Label("Abbrechen")
+        self["key_hint"] = Label("OK = Ausw\xc3\xa4hlen")
+        self["actions"]  = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {"ok": self._select, "cancel": self.close, "red": self.close},
             -1,
         )
-
 
         self._json_file = "/tmp/nordvpn_countries.json"
         self._container = eConsoleAppContainer()
@@ -99,27 +147,69 @@ class NordVPNCountryList(Screen):
 
 
 # ---------------------------------------------------------------------------
-# Settings screen
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Credentials entry screen (plain Screen, no ConfigList interference)
+# Credentials entry screen
 # ---------------------------------------------------------------------------
 
 class NordVPNCredentials(Screen):
-    skin = """
-        <screen position="center,center" size="740,300" title="NordVPN Zugangsdaten">
-            <widget name="info"      position="20,20"  size="700,160"
-                    font="Regular;23" halign="center" valign="center" foregroundColor="#888888"/>
-            <widget name="key_green" position="20,240" size="210,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#1f771f"/>
-            <widget name="key_red"   position="510,240" size="210,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313"/>
+
+    _SKIN_FHD = """
+        <screen position="0,0" size="1920,1080" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="510,320" size="900,468"  backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="510,320" size="900,80"   backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="510,400" size="900,3"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="510,700" size="900,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="510,702" size="900,86"   backgroundColor="#1A000000" zPosition="-4"/>
+            <widget name="title_lbl" position="530,328" size="860,64"
+                    font="Regular;40" halign="center" valign="center"
+                    foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="info"      position="530,412" size="860,278"
+                    font="Regular;28" halign="center" valign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <eLabel position="530,727" size="8,54" backgroundColor="#00BB00" zPosition="1"/>
+            <widget name="key_green" position="546,702" size="370,86"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="940,727" size="8,54" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"   position="956,702" size="426,86"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
         </screen>
     """
+    _SKIN_HD = """
+        <screen position="0,0" size="1280,720" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1280,720"  backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="340,213" size="600,317"  backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="340,213" size="600,54"   backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="340,267" size="600,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="340,468" size="600,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="340,470" size="600,60"   backgroundColor="#1A000000" zPosition="-4"/>
+            <widget name="title_lbl" position="354,217" size="572,50"
+                    font="Regular;28" halign="center" valign="center"
+                    foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="info"      position="354,274" size="572,188"
+                    font="Regular;20" halign="center" valign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <eLabel position="354,485" size="5,30" backgroundColor="#00BB00" zPosition="1"/>
+            <widget name="key_green" position="366,470" size="248,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="628,485" size="5,30" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"   position="640,470" size="286,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+        </screen>
+    """
+    skin = ""
 
     def __init__(self, session):
+        self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
+        self["title_lbl"] = Label("NordVPN Zugangsdaten")
         self["info"] = Label(
             "Service Credentials eingeben\n"
             "(NICHT Login-Passwort / Access Token!)\n\n"
@@ -174,27 +264,70 @@ class NordVPNCredentials(Screen):
 # ---------------------------------------------------------------------------
 
 class NordVPNSettings(Screen):
-    skin = """
-        <screen position="center,center" size="800,560" title="NordVPN Einstellungen">
-            <widget name="list"     position="20,20"  size="760,480"
-                    font="Regular;26" itemHeight="42" scrollbarMode="showOnDemand"/>
-            <widget name="key_red"  position="20,516" size="180,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313"/>
-            <widget name="key_hint" position="210,516" size="570,44"
-                    font="Regular;22" valign="center" foregroundColor="#888888"/>
+
+    _SKIN_FHD = """
+        <screen position="0,0" size="1920,1080" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="320,180" size="1280,748" backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="320,180" size="1280,80"  backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="320,260" size="1280,3"   backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="320,836" size="1280,2"   backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="320,838" size="1280,90"  backgroundColor="#1A000000" zPosition="-4"/>
+            <widget name="title_lbl" position="340,188" size="900,64"
+                    font="Regular;40" valign="center" foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="list"     position="340,268" size="1200,560"
+                    font="Regular;32" itemHeight="62" scrollbarMode="showOnDemand"
+                    foregroundColor="#e0e0e0" backgroundColor="#33000000"
+                    transparent="1"/>
+            <eLabel position="340,856" size="8,54" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"  position="356,838" size="280,90"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <widget name="key_hint" position="660,838" size="900,90"
+                    font="Regular;32" valign="center" foregroundColor="#888888" backgroundColor="#1A000000"
+                    transparent="1"/>
         </screen>
     """
+    _SKIN_HD = """
+        <screen position="0,0" size="1280,720" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1280,720"  backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="215,120" size="850,500"  backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="215,120" size="850,54"   backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="215,174" size="850,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="215,558" size="850,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="215,560" size="850,60"   backgroundColor="#1A000000" zPosition="-4"/>
+            <widget name="title_lbl" position="228,124" size="600,46"
+                    font="Regular;28" valign="center" foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="list"     position="228,180" size="814,372"
+                    font="Regular;24" itemHeight="46" scrollbarMode="showOnDemand"
+                    foregroundColor="#e0e0e0" backgroundColor="#33000000"
+                    transparent="1"/>
+            <eLabel position="228,575" size="5,30" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"  position="240,560" size="184,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <widget name="key_hint" position="440,560" size="596,60"
+                    font="Regular;21" valign="center" foregroundColor="#888888" backgroundColor="#1A000000"
+                    transparent="1"/>
+        </screen>
+    """
+    skin = ""
 
     _IDX_CREDS   = 0
     _IDX_COUNTRY = 1
     _IDX_PROTO   = 2
     _IDX_AUTO    = 3
+    _IDX_WEBIF   = 4
 
     def __init__(self, session):
+        self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
+        self["title_lbl"] = Label("Einstellungen")
         self["list"]     = MenuList([])
-        self["key_red"]  = Label("Zurück")
-        self["key_hint"] = Label("OK = Ändern")
+        self["key_red"]  = Label("Zur\xc3\xbcck")
+        self["key_hint"] = Label("OK = \xc3\x84ndern")
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions"],
             {
@@ -206,17 +339,23 @@ class NordVPNSettings(Screen):
             },
             -1,
         )
+        self._webif_was_running = False
+        self._webif_timer = eTimer()
+        self._webif_timer.callback.append(self._check_webif)
+        self._webif_timer.start(2000, False)
         self._refresh()
 
     def _entries(self):
         creds = "*** gesetzt ***" if manager.has_auth() else "(nicht gesetzt)"
         proto = manager.get_protocol().upper()
         auto  = "Ein" if manager.get_autostart() else "Aus"
+        webif = ("L\xc3\xa4uft  (Port %d)" % 8765) if manager.is_webif_running() else "Starten"
         return [
             "Zugangsdaten:   " + creds,
             "Land:           " + manager.get_country_name(),
             "Protokoll:      " + proto,
             "Autostart:      " + auto,
+            "Zugangsdaten per WebIF: " + webif,
         ]
 
     def _refresh(self):
@@ -232,6 +371,8 @@ class NordVPNSettings(Screen):
             self._toggle_proto()
         elif idx == self._IDX_AUTO:
             self._toggle_auto()
+        elif idx == self._IDX_WEBIF:
+            self._webif_action()
 
     def _refresh_cb(self, result=None):
         self._refresh()
@@ -250,6 +391,31 @@ class NordVPNSettings(Screen):
         manager.set_autostart(not manager.get_autostart())
         self._refresh()
 
+    def _check_webif(self):
+        running = manager.is_webif_running()
+        if running != self._webif_was_running:
+            self._webif_was_running = running
+            self._refresh()
+
+    def close(self):
+        self._webif_timer.stop()
+        Screen.close(self)
+
+    def _webif_action(self):
+        if manager.is_webif_running():
+            manager.stop_webif()
+            self._refresh()
+        else:
+            manager.start_webif()
+            url = manager.get_webif_url()
+            self.session.openWithCallback(
+                lambda *a: self._refresh(),
+                MessageBox,
+                "WebIF gestartet:\n%s\n\nIm Browser \xc3\xb6ffnen und Zugangsdaten eingeben.\nStoppt automatisch nach 5 Minuten." % url,
+                MessageBox.TYPE_INFO,
+                timeout=15,
+            )
+
     def _keyLeft(self):
         idx = self["list"].getSelectedIndex()
         if idx == self._IDX_PROTO:
@@ -265,32 +431,151 @@ class NordVPNSettings(Screen):
 # Main screen
 # ---------------------------------------------------------------------------
 
-class NordVPNMain(Screen):
-    skin = """
-        <screen position="center,center" size="900,510" title="NordVPN">
-            <widget name="status_lbl"  position="20,20"  size="860,56"
-                    font="Regular;38" halign="center" valign="center"/>
-            <widget name="server_lbl"  position="20,84"  size="860,34"
-                    font="Regular;26" halign="center" foregroundColor="#888888"/>
-            <widget name="ip_lbl"      position="20,120" size="860,30"
-                    font="Regular;22" halign="center" foregroundColor="#888888"/>
-            <widget name="country_lbl" position="20,156" size="860,34"
-                    font="Regular;24" halign="center" foregroundColor="#4488ff"/>
-            <widget name="log_lbl"     position="20,198" size="860,178"
-                    font="Regular;20" foregroundColor="#aaaaaa"/>
+def _fmt_duration(secs):
+    secs = int(secs)
+    d = secs // 86400
+    h = (secs % 86400) // 3600
+    m = (secs % 3600) // 60
+    s = secs % 60
+    if d > 0:
+        return "%dd %d:%02d:%02d" % (d, h, m, s)
+    if h > 0:
+        return "%d:%02d:%02d" % (h, m, s)
+    return "%02d:%02d" % (m, s)
 
-            <widget name="key_red"     position="20,420"  size="205,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#9f1313"/>
-            <widget name="key_green"   position="245,420" size="205,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#1f771f"/>
-            <widget name="key_yellow"  position="470,420" size="205,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#a07000"/>
-            <widget name="key_blue"    position="695,420" size="185,44"
-                    font="Regular;24" halign="center" valign="center" backgroundColor="#18188b"/>
+
+def _fmt_bytes(n):
+    if n < 0:
+        n = 0
+    if n < 1024:
+        return "%d B" % n
+    if n < 1024 * 1024:
+        return "%.1f KB" % (n / 1024.0)
+    if n < 1024 * 1024 * 1024:
+        return "%.1f MB" % (n / (1024.0 * 1024))
+    return "%.2f GB" % (n / (1024.0 * 1024 * 1024))
+
+
+class NordVPNMain(Screen):
+
+    _SKIN_FHD = """
+        <screen position="0,0" size="1920,1080" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="320,180" size="1280,748" backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="320,180" size="1280,80"  backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="320,260" size="1280,3"   backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="320,836" size="1280,2"   backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="320,838" size="1280,90"  backgroundColor="#1A000000" zPosition="-4"/>
+            <eLabel position="330,524" size="1260,310" backgroundColor="#20000000" zPosition="-2"/>
+            <widget name="title_lbl"   position="340,188" size="900,64"
+                    font="Regular;40" valign="center" foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="status_lbl"  position="340,268" size="1200,68"
+                    font="Regular;60" halign="center" valign="center"
+                    foregroundColor="#e0e0e0" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="server_lbl"  position="340,342" size="1200,36"
+                    font="Regular;32" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="ip_lbl"      position="340,382" size="1200,32"
+                    font="Regular;28" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="country_lbl" position="340,418" size="1200,32"
+                    font="Regular;28" halign="center"
+                    foregroundColor="#4ecdc4" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="city_lbl"    position="340,454" size="1200,32"
+                    font="Regular;28" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="transfer_lbl" position="340,490" size="1200,32"
+                    font="Regular;28" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="log_lbl"     position="340,528" size="1240,300"
+                    font="Regular;24" foregroundColor="#888888" backgroundColor="#20000000"
+                    transparent="1"/>
+            <eLabel position="340,856" size="8,54" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"     position="356,838" size="272,90"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="660,856" size="8,54" backgroundColor="#00BB00" zPosition="1"/>
+            <widget name="key_green"   position="676,838" size="272,90"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="980,856" size="8,54" backgroundColor="#FFD700" zPosition="1"/>
+            <widget name="key_yellow"  position="996,838" size="272,90"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="1300,856" size="8,54" backgroundColor="#3366FF" zPosition="1"/>
+            <widget name="key_blue"    position="1316,838" size="272,90"
+                    font="Regular;32" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
         </screen>
     """
+    _SKIN_HD = """
+        <screen position="0,0" size="1280,720" flags="wfNoBorder">
+            <eLabel position="0,0"    size="1280,720"  backgroundColor="#66000000" zPosition="-6"/>
+            <eLabel position="215,120" size="850,500"  backgroundColor="#33000000" zPosition="-5"/>
+            <eLabel position="215,120" size="850,54"   backgroundColor="#33000000" zPosition="-4"/>
+            <eLabel position="215,174" size="850,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="215,558" size="850,2"    backgroundColor="#004ecdc4" zPosition="-3"/>
+            <eLabel position="215,560" size="850,60"   backgroundColor="#1A000000" zPosition="-4"/>
+            <eLabel position="222,352" size="836,202"  backgroundColor="#20000000" zPosition="-2"/>
+            <widget name="title_lbl"   position="228,126" size="600,42"
+                    font="Regular;28" valign="center" foregroundColor="#ffffff" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="status_lbl"  position="228,180" size="806,46"
+                    font="Regular;42" halign="center" valign="center"
+                    foregroundColor="#e0e0e0" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="server_lbl"  position="228,228" size="806,24"
+                    font="Regular;22" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="ip_lbl"      position="228,254" size="806,22"
+                    font="Regular;20" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="country_lbl" position="228,278" size="806,22"
+                    font="Regular;20" halign="center"
+                    foregroundColor="#4ecdc4" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="city_lbl"    position="228,302" size="806,22"
+                    font="Regular;20" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="transfer_lbl" position="228,326" size="806,22"
+                    font="Regular;20" halign="center"
+                    foregroundColor="#888888" backgroundColor="#33000000"
+                    transparent="1"/>
+            <widget name="log_lbl"     position="228,356" size="820,192"
+                    font="Regular;16" foregroundColor="#888888" backgroundColor="#20000000"
+                    transparent="1"/>
+            <eLabel position="228,575" size="5,30" backgroundColor="#EE0000" zPosition="1"/>
+            <widget name="key_red"     position="240,560" size="178,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="440,575" size="5,30" backgroundColor="#00BB00" zPosition="1"/>
+            <widget name="key_green"   position="452,560" size="174,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="648,575" size="5,30" backgroundColor="#FFD700" zPosition="1"/>
+            <widget name="key_yellow"  position="660,560" size="176,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+            <eLabel position="848,575" size="5,30" backgroundColor="#3366FF" zPosition="1"/>
+            <widget name="key_blue"    position="860,560" size="198,60"
+                    font="Regular;21" valign="center" foregroundColor="#cccccc" backgroundColor="#1A000000"
+                    transparent="1"/>
+        </screen>
+    """
+    skin = ""
 
     def __init__(self, session):
+        self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
         self._con_container = eConsoleAppContainer()
         self._con_container.dataAvail.append(self._on_output)
@@ -300,31 +585,41 @@ class NordVPNMain(Screen):
         self._dc_container.appClosed.append(self._on_disconnect_done)
         self._ip_container = eConsoleAppContainer()
         self._ip_container.appClosed.append(self._on_ip_done)
+        self._city_container = eConsoleAppContainer()
+        self._city_container.dataAvail.append(self._on_city_data)
+        self._city_container.appClosed.append(self._on_city_done)
+        self._city_buf = ""
+        self._session_rx_base = 0
+        self._session_tx_base = 0
+        self._connect_time = None
         self._log_buf = ""
         self._prev_connected = None
         self._connecting = False
         self._auth_timer = eTimer()
         self._auth_timer.callback.append(self._check_auth)
 
-        self["status_lbl"] = Label("")
-        self["server_lbl"] = Label("")
-        self["ip_lbl"]     = Label("")
-        self["country_lbl"] = Label("")
-        self["log_lbl"] = Label("")
-        self["key_red"] = Label("")
-        self["key_green"] = Label("")
-        self["key_yellow"] = Label("Einstellungen")
-        self["key_blue"] = Label("Beenden")
+        self["title_lbl"]    = Label("NordVPN v%s" % VERSION)
+        self["status_lbl"]   = Label("")
+        self["server_lbl"]   = Label("")
+        self["ip_lbl"]       = Label("")
+        self["country_lbl"]  = Label("")
+        self["city_lbl"]     = Label("")
+        self["transfer_lbl"] = Label("")
+        self["log_lbl"]      = Label("")
+        self["key_red"]     = Label("")
+        self["key_green"]   = Label("")
+        self["key_yellow"]  = Label("Einstellungen")
+        self["key_blue"]    = Label("Beenden")
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {
-                "ok": self._connect,
+                "ok":     self._connect,
                 "cancel": self.close,
-                "green": self._connect,
-                "red": self._disconnect,
+                "green":  self._connect,
+                "red":    self._disconnect,
                 "yellow": self._open_settings,
-                "blue": self.close,
+                "blue":   self.close,
             },
             -1,
         )
@@ -334,25 +629,64 @@ class NordVPNMain(Screen):
         self._timer.start(3000, False)
         self._ip_timer = eTimer()
         self._ip_timer.callback.append(self._fetch_ip)
+        self._city_timer = eTimer()
+        self._city_timer.callback.append(self._fetch_city)
         self._update_status()
+
+    def _set_status_color(self, connected):
+        try:
+            if connected:
+                self["status_lbl"].instance.setForegroundColor(gRGB(0x4e, 0xcd, 0xc4))
+            else:
+                self["status_lbl"].instance.setForegroundColor(gRGB(0x88, 0x88, 0x88))
+        except Exception:
+            pass
 
     def _update_status(self):
         connected = manager.is_connected()
         if connected != self._prev_connected:
             if connected:
+                if self._prev_connected is None:
+                    self._restore_session()
+                else:
+                    self._connect_time = time.time()
+                    rx, tx = self._read_tun_bytes()
+                    self._session_rx_base = rx if rx is not None else 0
+                    self._session_tx_base = tx if tx is not None else 0
+                    self._save_session()
                 self._ip_timer.start(3000, True)
+                self._city_timer.start(4000, True)
             else:
                 self._ip_timer.stop()
+                self._connect_time = None
+                try:
+                    os.remove("/tmp/nordvpn_session")
+                except Exception:
+                    pass
                 self["ip_lbl"].setText("")
+                self["city_lbl"].setText("")
+                self["transfer_lbl"].setText("")
             self._prev_connected = connected
         if connected:
             self["status_lbl"].setText("Verbunden")
+            self._set_status_color(True)
             srv = manager.get_current_server()
             self["server_lbl"].setText(srv if srv else "")
             self["key_red"].setText("Trennen")
             self["key_green"].setText("")
+            rx, tx = self._read_tun_bytes()
+            dur = _fmt_duration(time.time() - self._connect_time) if self._connect_time else ""
+            if rx is not None:
+                dl = rx - self._session_rx_base
+                ul = tx - self._session_tx_base
+                self["transfer_lbl"].setText(
+                    "DL: %s   UL: %s   |   Verbunden seit: %s" % (_fmt_bytes(dl), _fmt_bytes(ul), dur)
+                )
+            elif dur:
+                self["transfer_lbl"].setText("Verbunden seit: %s" % dur)
         else:
             self["status_lbl"].setText("Getrennt")
+            self._set_status_color(False)
             self["server_lbl"].setText("")
             self["key_red"].setText("")
             self["key_green"].setText("Verbinden")
@@ -379,10 +713,67 @@ class NordVPNMain(Screen):
         except Exception:
             pass
 
+    def _fetch_city(self):
+        if manager.is_connected():
+            self._city_buf = ""
+            self._city_container.execute(
+                "wget -q -T 5 -O - 'http://ip-api.com/line/?fields=city'"
+            )
+
+    def _on_city_data(self, data):
+        self._city_buf += data
+
+    def _on_city_done(self, retval):
+        city = self._city_buf.strip()
+        if retval == 0 and city:
+            self["city_lbl"].setText(city)
+
+    def _read_tun_bytes(self):
+        try:
+            with open("/proc/net/dev") as f:
+                for line in f:
+                    if "tun0" in line:
+                        parts = line.split()
+                        return int(parts[1]), int(parts[9])
+        except Exception:
+            pass
+        return None, None
+
+    def _save_session(self):
+        try:
+            with open("/tmp/nordvpn_session", "w") as f:
+                f.write("%s %d %d" % (
+                    self._connect_time,
+                    self._session_rx_base,
+                    self._session_tx_base,
+                ))
+        except Exception:
+            pass
+
+    def _restore_session(self):
+        try:
+            with open("/tmp/nordvpn_session") as f:
+                parts = f.read().split()
+            self._connect_time = float(parts[0])
+            self._session_rx_base = int(parts[1])
+            self._session_tx_base = int(parts[2])
+            return
+        except Exception:
+            pass
+        self._connect_time = time.time()
+        rx, tx = self._read_tun_bytes()
+        self._session_rx_base = rx if rx is not None else 0
+        self._session_tx_base = tx if tx is not None else 0
+
+    def close(self):
+        self._timer.stop()
+        self._city_timer.stop()
+        Screen.close(self)
+
     def _on_output(self, data):
-        self._log_buf += data
-        lines = self._log_buf.strip().splitlines()
-        self["log_lbl"].setText("\n".join(lines[-6:]))
+        lines = (self._log_buf + data).strip().splitlines()
+        self._log_buf = "\n".join(lines[-9:]) + "\n"
+        self["log_lbl"].setText(self._log_buf.strip())
 
     def _check_auth(self):
         if not self._connecting:
@@ -398,10 +789,10 @@ class NordVPNMain(Screen):
             return
         lines = [l.split(" ", 4)[-1] for l in new_log.strip().splitlines() if l.strip()]
         self._log_buf += "\n".join(lines[-4:])
-        self["log_lbl"].setText("\n".join(self._log_buf.strip().splitlines()[-6:]))
+        self["log_lbl"].setText("\n".join(self._log_buf.strip().splitlines()[-9:]))
         self.session.open(
             MessageBox,
-            "Verbindung fehlgeschlagen: Zugangsdaten ungültig.",
+            "Verbindung fehlgeschlagen: Zugangsdaten ung\xc3\xbcltig.",
             MessageBox.TYPE_ERROR,
             timeout=8,
         )
@@ -434,7 +825,7 @@ class NordVPNMain(Screen):
         if self._con_container.running():
             self.session.open(
                 MessageBox,
-                "Verbindungsaufbau läuft bereits.",
+                "Verbindungsaufbau l\xc3\xa4uft bereits.",
                 MessageBox.TYPE_INFO,
                 timeout=3,
             )
@@ -447,6 +838,10 @@ class NordVPNMain(Screen):
         self._log_buf = ""
         self["log_lbl"].setText("Verbinde...")
         self["status_lbl"].setText("Verbinde...")
+        try:
+            self["status_lbl"].instance.setForegroundColor(gRGB(0xff, 0xff, 0xff))
+        except Exception:
+            pass
         self["key_red"].setText("")
         self["key_green"].setText("")
         self._con_container.execute(manager.get_connect_cmd())
@@ -487,7 +882,7 @@ def _check_vpn_status():
     if _last_vpn_status is not None and current != _last_vpn_status:
         if current:
             srv = manager.get_current_server()
-            msg = ("NordVPN verbunden" + (" – " + srv if srv else "")).encode("utf-8")
+            msg = ("NordVPN verbunden" + (" \xe2\x80\x93 " + srv if srv else "")).encode("utf-8")
             AddPopup(msg, MessageBox.TYPE_INFO, timeout=5, id="nordvpn_notify")
         else:
             AddPopup("NordVPN getrennt!", MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
@@ -523,7 +918,7 @@ def Plugins(**kwargs):
     return [
         PluginDescriptor(
             name="NordVPN",
-            description="NordVPN Client für Enigma2",
+            description="NordVPN Client f\xc3\xbcr Enigma2",
             where=PluginDescriptor.WHERE_PLUGINMENU,
             icon="plugin.png",
             fnc=main,

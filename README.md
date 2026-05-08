@@ -12,12 +12,16 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 <table>
   <tr>
-    <td><img src="screenshots/MainScreen.png" width="420" alt="Hauptbildschirm (getrennt)"></td>
-    <td><img src="screenshots/Verbunden.png" width="420" alt="Hauptbildschirm (verbunden)"></td>
+    <td><img src="screenshots/Hauptseite.jpg" width="420" alt="Hauptbildschirm (verbunden)"></td>
+    <td><img src="screenshots/Verbindung_frisch.jpg" width="420" alt="Verbindungsaufbau mit Log"></td>
   </tr>
   <tr>
-    <td><img src="screenshots/Settings.png" width="420" alt="Einstellungen"></td>
-    <td><img src="screenshots/Landauswahl.png" width="420" alt="Länderauswahl"></td>
+    <td><img src="screenshots/Einstellungen.jpg" width="420" alt="Einstellungen"></td>
+    <td><img src="screenshots/Land.jpg" width="420" alt="Länderauswahl"></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/WebIF_Start.jpg" width="420" alt="WebIF-Start OSD-Meldung"></td>
+    <td><img src="screenshots/WebIF.png" width="420" alt="WebIF Zugangsdaten im Browser"></td>
   </tr>
 </table>
 
@@ -117,7 +121,7 @@ Wenn aktiviert, verbindet das Plugin automatisch beim Starten der Box.
 | Gelb | Einstellungen |
 | Blau | Plugin schließen |
 
-Der Verbindungsstatus, der aktuelle Server und die externe IP-Adresse werden im Hauptfenster angezeigt und regelmäßig aktualisiert.
+Das Hauptfenster zeigt: Verbindungsstatus, aktueller Server, externe IP, Land, Protokoll, Stadt, Session-Traffic (DL/UL) und Verbindungsdauer – alles wird regelmäßig aktualisiert.
 
 ---
 

@@ -35,4 +35,5 @@ if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
 fi
 
 rm -f "$PID_FILE"
+rm -f /etc/openvpn/nordvpn.conf
 echo "Disconnected"
