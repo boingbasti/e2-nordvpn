@@ -47,8 +47,11 @@ def _set_dns():
 
 def _disable_ipv6():
     try:
-        open("/proc/sys/net/ipv6/conf/all/disable_ipv6", "w").write("1\n")
-        open("/proc/sys/net/ipv6/conf/default/disable_ipv6", "w").write("1\n")
+        import glob
+        for path in glob.glob("/proc/sys/net/ipv6/conf/*/disable_ipv6"):
+            iface = path.split("/")[5]
+            if iface != "lo":
+                open(path, "w").write("1\n")
         log("IPv6 disabled")
     except Exception as e:
         log("WARNING: Could not disable IPv6: %s" % str(e))

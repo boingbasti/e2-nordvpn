@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.4"
+VERSION = "1.5"
 
 import os
 import time

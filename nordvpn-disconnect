@@ -14,8 +14,10 @@ if [ -f "$RESOLV_BACKUP" ]; then
     echo "DNS restored"
 fi
 
-echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6
-echo 0 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+for f in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
+    iface=$(echo "$f" | cut -d/ -f6)
+    [ "$iface" != "lo" ] && echo 0 > "$f"
+done
 echo "IPv6 restored"
 
 PID_FILE="/var/run/openvpn.nordvpn.pid"
