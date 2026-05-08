@@ -30,6 +30,7 @@ chmod +x /usr/sbin/nordvpn-connect \\
          /usr/sbin/nordvpn-fetch-countries \\
          /usr/sbin/nordvpn-watchdog \\
          /usr/sbin/nordvpn-webif
+rm -f /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/*.pyo
 WDOG_PID=/var/run/nordvpn-watchdog.pid
 if [ -f "$WDOG_PID" ] && [ -d "/proc/$(cat $WDOG_PID 2>/dev/null)" ]; then
     exit 0
@@ -71,6 +72,7 @@ def add_file(tar, src_path, arc_path, mode=0o644):
     info = tarfile.TarInfo(name=arc_path)
     info.size = len(data)
     info.mode = mode
+    info.mtime = int(os.path.getmtime(src_path))
     tar.addfile(info, io.BytesIO(data))
 
 
