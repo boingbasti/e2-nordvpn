@@ -65,6 +65,8 @@ ssh root@<BOX-IP> "opkg install /tmp/nordvpn.ipk"
 
 Das Plugin installiert sich vollständig – Berechtigungen werden automatisch gesetzt, der Watchdog-Daemon wird beim nächsten Verbinden gestartet.
 
+Das Plugin erscheint nach einem Neustart von Enigma2 im Menü unter **Plugins → NordVPN**.
+
 ### Installierte Dateien
 
 | Pfad | Beschreibung |
@@ -74,6 +76,7 @@ Das Plugin installiert sich vollständig – Berechtigungen werden automatisch g
 | `/usr/sbin/nordvpn-disconnect` | Verbindungstrennung |
 | `/usr/sbin/nordvpn-fetch-countries` | Länderliste von der NordVPN-API laden |
 | `/usr/sbin/nordvpn-watchdog` | Hintergrunddaemon |
+| `/usr/sbin/nordvpn-webif` | Weboberfläche zur Credential-Eingabe |
 
 ---
 
@@ -85,10 +88,14 @@ Dann **Gelb → Einstellungen**:
 
 ### 1. Zugangsdaten hinterlegen
 
-Einstellungen → **Zugangsdaten** → OK
+Es gibt zwei Wege, die Credentials einzugeben:
+
+**Über die Fernbedienung:** Einstellungen → **Zugangsdaten** → OK – Username und Passwort über die OSD-Tastatur eingeben.
+
+**Über den Browser (WebIF):** Einstellungen → **WebIF starten** → OK – auf der Box startet ein temporärer Webserver. Die angezeigte Adresse im Browser öffnen und die Daten dort eingeben. Der Webserver stoppt automatisch nach 5 Minuten oder sobald die Daten gespeichert wurden.
 
 Service Username und Service Passwort eingeben (nicht die normalen Login-Daten – siehe oben).  
-Die Credentials werden verschlüsselt auf der Box gespeichert und sind nicht im Plugin selbst enthalten.
+Die Credentials werden im Klartext unter `/etc/openvpn/nordvpn_auth.txt` gespeichert (Berechtigungen: 600, nur für root lesbar).
 
 ### 2. Land auswählen
 
@@ -153,7 +160,7 @@ cat enigma2-plugin-extensions-nordvpn_*_all.ipk | ssh root@<BOX-IP> "cat > /tmp/
 ssh root@<BOX-IP> "opkg install --force-reinstall /tmp/nordvpn.ipk && opkg remove enigma2-plugin-extensions-nordvpn"
 ```
 
-Das Deinstallations-Skript räumt vollständig auf: Watchdog und OpenVPN werden beendet, alle Konfigurationsdateien und Logdateien werden gelöscht, die **Credentials werden sicher entfernt**.
+Das Deinstallations-Skript räumt vollständig auf: Watchdog und OpenVPN werden beendet, alle Konfigurationsdateien und Logdateien werden gelöscht, die **Credentials werden entfernt**.
 
 ---
 
