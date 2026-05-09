@@ -32,8 +32,10 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 - Verbindung zum besten verfügbaren NordVPN-Server im gewählten Land
 - Automatische Serverwahl über die offizielle NordVPN-API
 - Unterstützung für **UDP** und **TCP**
+- Wahl zwischen **Standard-** und **P2P-Servern**
 - **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt
 - **IPv6-Leak-Schutz** – IPv6 wird für die Dauer der VPN-Verbindung deaktiviert
+- **Mediathek-Fix** – löst CDN-Hostnamen vor dem VPN-Start auf, damit ZDF, 3sat, ZDFinfo, ZDFneo und Phoenix im VPN erreichbar bleiben (optional)
 - **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch
 - **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau, auch wenn das Plugin geschlossen ist
 - **Autostart** beim Hochfahren der Box (optional)
@@ -54,11 +56,9 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 ## Installation
 
-Die aktuelle Version als ZIP-Archiv von der [Releases-Seite](../../releases/latest) herunterladen, entpacken und per SSH auf die Box übertragen:
+Das IPK von der [Releases-Seite](../../releases/latest) herunterladen und per SSH auf die Box übertragen:
 
 ```sh
-unzip enigma2-plugin-extensions-nordvpn_*.zip
-
 cat enigma2-plugin-extensions-nordvpn_*_all.ipk | ssh root@<BOX-IP> "cat > /tmp/nordvpn.ipk"
 ssh root@<BOX-IP> "opkg install /tmp/nordvpn.ipk"
 ```
@@ -111,7 +111,20 @@ Einstellungen → **Protokoll** → OK oder Links/Rechts
 - **UDP** – Standard, schneller
 - **TCP** – stabiler hinter restriktiven Firewalls
 
-### 4. Autostart
+### 4. Server-Typ wählen
+
+Einstellungen → **Server-Typ** → OK oder Links/Rechts
+
+- **Standard** – normale NordVPN-Server (Voreinstellung)
+- **P2P** – Server aus dem P2P-Pool
+
+### 5. Mediathek-Fix
+
+Einstellungen → **Mediathek-Fix** → OK oder Links/Rechts
+
+Löst `nrodlzdf-a.akamaihd.net` vor dem VPN-Start mit dem Heim-DNS auf und trägt die IP in `/etc/hosts` ein. Dadurch wird verhindert, dass Akamai nach VPN-Aufbau einen Blocking-Node zurückgibt, der Verbindungen von VPN-IPs abbricht. Betrifft: ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix. Beim Trennen wird der Eintrag automatisch entfernt.
+
+### 6. Autostart
 
 Einstellungen → **Autostart** → OK oder Links/Rechts
 
@@ -153,7 +166,7 @@ Beim manuellen Trennen über das Plugin wird der Watchdog beendet – es erfolgt
 ## Deinstallation
 
 ```sh
-# IPK auf die Box kopieren (falls nicht mehr vorhanden, aus dem Release-ZIP)
+# IPK auf die Box kopieren (aus dem Release herunterladen)
 cat enigma2-plugin-extensions-nordvpn_*_all.ipk | ssh root@<BOX-IP> "cat > /tmp/nordvpn.ipk"
 
 # Paket registrieren und vollständig entfernen
