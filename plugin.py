@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.5"
+VERSION = "1.6"
 
 import os
 import time
@@ -320,6 +320,8 @@ class NordVPNSettings(Screen):
     _IDX_PROTO   = 2
     _IDX_AUTO    = 3
     _IDX_WEBIF   = 4
+    _IDX_STYPE   = 5
+    _IDX_SFIX    = 6
 
     def __init__(self, session):
         self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
@@ -350,12 +352,16 @@ class NordVPNSettings(Screen):
         proto = manager.get_protocol().upper()
         auto  = "Ein" if manager.get_autostart() else "Aus"
         webif = ("L\xc3\xa4uft  (Port %d)" % 8765) if manager.is_webif_running() else "Starten"
+        stype = "P2P" if manager.get_server_type() == "p2p" else "Standard"
+        sfix  = "Ein" if manager.get_streaming_fix() else "Aus"
         return [
             "Zugangsdaten:   " + creds,
             "Land:           " + manager.get_country_name(),
             "Protokoll:      " + proto,
             "Autostart:      " + auto,
             "Zugangsdaten per WebIF: " + webif,
+            "Server-Typ:     " + stype,
+            "Mediathek-Fix:  " + sfix,
         ]
 
     def _refresh(self):
@@ -373,6 +379,10 @@ class NordVPNSettings(Screen):
             self._toggle_auto()
         elif idx == self._IDX_WEBIF:
             self._webif_action()
+        elif idx == self._IDX_STYPE:
+            self._toggle_stype()
+        elif idx == self._IDX_SFIX:
+            self._toggle_sfix()
 
     def _refresh_cb(self, result=None):
         self._refresh()
@@ -389,6 +399,14 @@ class NordVPNSettings(Screen):
 
     def _toggle_auto(self):
         manager.set_autostart(not manager.get_autostart())
+        self._refresh()
+
+    def _toggle_stype(self):
+        manager.set_server_type("p2p" if manager.get_server_type() == "standard" else "standard")
+        self._refresh()
+
+    def _toggle_sfix(self):
+        manager.set_streaming_fix(not manager.get_streaming_fix())
         self._refresh()
 
     def _check_webif(self):
@@ -422,6 +440,10 @@ class NordVPNSettings(Screen):
             self._toggle_proto()
         elif idx == self._IDX_AUTO:
             self._toggle_auto()
+        elif idx == self._IDX_STYPE:
+            self._toggle_stype()
+        elif idx == self._IDX_SFIX:
+            self._toggle_sfix()
 
     def _keyRight(self):
         self._keyLeft()

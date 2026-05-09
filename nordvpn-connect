@@ -10,14 +10,20 @@ import json
 import subprocess
 import time
 
-COUNTRY_ID  = int(sys.argv[1]) if len(sys.argv) > 1 else 81
-PROTO       = sys.argv[2] if len(sys.argv) > 2 else "udp"
-AUTH_FILE   = "/etc/openvpn/nordvpn_auth.txt"
-OVPN_CONFIG = "/etc/openvpn/nordvpn.conf"
-PID_FILE    = "/var/run/openvpn.nordvpn.pid"
-LOG_FILE    = "/var/log/nordvpn.log"
-SERVER_FILE = "/tmp/nordvpn_server.txt"
-API_BASE    = "https://api.nordvpn.com/v1"
+COUNTRY_ID   = int(sys.argv[1]) if len(sys.argv) > 1 else 81
+PROTO        = sys.argv[2] if len(sys.argv) > 2 else "udp"
+SERVER_TYPE  = sys.argv[3] if len(sys.argv) > 3 else "standard"
+AUTH_FILE    = "/etc/openvpn/nordvpn_auth.txt"
+OVPN_CONFIG  = "/etc/openvpn/nordvpn.conf"
+PID_FILE     = "/var/run/openvpn.nordvpn.pid"
+LOG_FILE     = "/var/log/nordvpn.log"
+SERVER_FILE  = "/tmp/nordvpn_server.txt"
+CONFIG_FILE  = "/etc/enigma2/nordvpn.conf"
+API_BASE     = "https://api.nordvpn.com/v1"
+
+HOSTS_FILE   = "/etc/hosts"
+HOSTS_MARKER = "# nordvpn-streaming-fix"
+CDN_HOSTS    = ["nrodlzdf-a.akamaihd.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix
 
 
 WATCHDOG_PID  = "/var/run/nordvpn-watchdog.pid"
@@ -30,6 +36,44 @@ NORDVPN_DNS   = ["103.86.96.100", "103.86.99.100"]
 def log(msg):
     print msg
     sys.stdout.flush()
+
+
+def _get_streaming_fix():
+    try:
+        import ConfigParser
+        cfg = ConfigParser.SafeConfigParser()
+        cfg.read(CONFIG_FILE)
+        return cfg.get("nordvpn", "streaming_fix") == "1"
+    except Exception:
+        return False
+
+
+def _clean_cdn_hosts():
+    try:
+        with open(HOSTS_FILE) as f:
+            lines = f.readlines()
+        clean = [l for l in lines if HOSTS_MARKER not in l]
+        if len(clean) != len(lines):
+            with open(HOSTS_FILE, "w") as f:
+                f.writelines(clean)
+    except Exception:
+        pass
+
+
+def _pre_resolve_cdn():
+    import socket
+    _clean_cdn_hosts()
+    entries = []
+    for host in CDN_HOSTS:
+        try:
+            ip = socket.gethostbyname(host)
+            entries.append("%s %s %s\n" % (ip, host, HOSTS_MARKER))
+            log("CDN pre-resolved: %s -> %s" % (host, ip))
+        except Exception as e:
+            log("WARNING: CDN-Aufloesung fehlgeschlagen fuer %s: %s" % (host, str(e)))
+    if entries:
+        with open(HOSTS_FILE, "a") as f:
+            f.writelines(entries)
 
 
 def _set_dns():
@@ -97,6 +141,8 @@ def get_best_server():
            "?filters[country_id]=%d"
            "&filters[servers_technologies][identifier]=%s"
            "&limit=1") % (API_BASE, COUNTRY_ID, tech)
+    if SERVER_TYPE == "p2p":
+        url += "&filters[servers_groups][identifier]=legacy_p2p"
     data = json.loads(fetch(url))
     if not data:
         return None
@@ -165,6 +211,9 @@ def main():
     with open(OVPN_CONFIG, "w") as f:
         f.write(config)
     os.chmod(OVPN_CONFIG, 0o600)
+
+    if _get_streaming_fix():
+        _pre_resolve_cdn()
 
     log("Starting OpenVPN...")
     ret = subprocess.call([

@@ -6,10 +6,12 @@ import tarfile
 import io
 
 PLUGIN_NAME   = "enigma2-plugin-extensions-nordvpn"
-VERSION       = "1.5"
+VERSION       = "1.6"
 ARCHITECTURE  = "all"
-MAINTAINER    = "boingbasti"
-DESCRIPTION   = "NordVPN OpenVPN-Client fuer Enigma2"
+MAINTAINER    = "saufsoldat"
+DESCRIPTION   = "NordVPN OpenVPN-Client für Enigma2"
+HOMEPAGE      = "https://github.com/boingbasti/e2-nordvpn"
+DEPENDS       = "openvpn"
 
 PLUGIN_DEST = "/usr/lib/enigma2/python/Plugins/Extensions/NordVPN"
 SBIN_DEST   = "/usr/sbin"
@@ -52,7 +54,6 @@ if [ -f /var/run/nordvpn-webif.pid ]; then
     kill "$(cat /var/run/nordvpn-webif.pid 2>/dev/null)" 2>/dev/null || true
     rm -f /var/run/nordvpn-webif.pid
 fi
-rm -f /etc/openvpn/nordvpn_auth.txt
 rm -f /etc/openvpn/nordvpn.conf
 rm -f /var/log/nordvpn.log
 rm -f /tmp/nordvpn_server.txt
@@ -61,6 +62,7 @@ rm -f /tmp/nordvpn_session
 rm -f /tmp/nordvpn_extip.txt
 rm -f /etc/resolv.conf.nordvpn.bak
 if [ "$1" != "upgrade" ]; then
+    rm -f /etc/openvpn/nordvpn_auth.txt
     rm -f /etc/enigma2/nordvpn.conf
 fi
 """
@@ -90,9 +92,11 @@ def build_control_tar():
         f"Version: {VERSION}\n"
         f"Architecture: {ARCHITECTURE}\n"
         f"Maintainer: {MAINTAINER}\n"
-        f"Description: {DESCRIPTION}\n"
-        f"Section: extra\n"
+        f"Homepage: {HOMEPAGE}\n"
+        f"Depends: {DEPENDS}\n"
+        f"Section: misc\n"
         f"Priority: optional\n"
+        f"Description: {DESCRIPTION}\n"
     ).encode("utf-8")
 
     buf = io.BytesIO()

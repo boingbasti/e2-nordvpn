@@ -34,7 +34,11 @@ def read_config():
         proto = cfg.get("nordvpn", "protocol")
     except Exception:
         proto = "udp"
-    return country_id, proto
+    try:
+        server_type = cfg.get("nordvpn", "server_type")
+    except Exception:
+        server_type = "standard"
+    return country_id, proto, server_type
 
 
 def main():
@@ -48,8 +52,8 @@ def main():
             continue
         if not was_connected:
             continue
-        country_id, proto = read_config()
-        subprocess.Popen(["python", CONNECT_CMD, country_id, proto])
+        country_id, proto, server_type = read_config()
+        subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type])
 
 
 if __name__ == "__main__":

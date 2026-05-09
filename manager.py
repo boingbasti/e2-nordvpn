@@ -74,6 +74,18 @@ class NordVPNManager(object):
     def set_autostart(self, enabled):
         self._set("autostart", "1" if enabled else "0")
 
+    def get_server_type(self):
+        return self._get("server_type", "standard")
+
+    def set_server_type(self, stype):
+        self._set("server_type", stype)
+
+    def get_streaming_fix(self):
+        return self._get("streaming_fix", "0") == "1"
+
+    def set_streaming_fix(self, enabled):
+        self._set("streaming_fix", "1" if enabled else "0")
+
     def save_credentials(self, username, password):
         auth_dir = os.path.dirname(AUTH_FILE)
         if not os.path.isdir(auth_dir):
@@ -174,10 +186,11 @@ class NordVPNManager(object):
             pass
 
     def get_connect_cmd(self):
-        return "%s %d %s" % (
+        return "%s %d %s %s" % (
             CONNECT_CMD,
             self.get_country_id(),
             self.get_protocol(),
+            self.get_server_type(),
         )
 
     def get_disconnect_cmd(self):

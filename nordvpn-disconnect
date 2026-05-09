@@ -20,6 +20,11 @@ for f in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
 done
 echo "IPv6 restored"
 
+if grep -q "# nordvpn-streaming-fix" /etc/hosts 2>/dev/null; then
+    grep -v "# nordvpn-streaming-fix" /etc/hosts > /tmp/hosts.tmp && mv /tmp/hosts.tmp /etc/hosts
+    echo "Streaming-Fix entfernt"
+fi
+
 PID_FILE="/var/run/openvpn.nordvpn.pid"
 
 if [ ! -f "$PID_FILE" ]; then
