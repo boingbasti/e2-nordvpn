@@ -155,10 +155,14 @@ class NordVPNManager(object):
 
     def get_box_ip(self):
         import socket
+        import fcntl
+        import struct
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
+            ip = socket.inet_ntoa(fcntl.ioctl(
+                s.fileno(), 0x8915,
+                struct.pack("256s", "eth0"[:15])
+            )[20:24])
             s.close()
             return ip
         except Exception:

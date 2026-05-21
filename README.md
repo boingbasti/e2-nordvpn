@@ -36,8 +36,8 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 - **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt
 - **IPv6-Leak-Schutz** – IPv6 wird für die Dauer der VPN-Verbindung deaktiviert
 - **Mediathek-Fix** – löst CDN-Hostnamen vor dem VPN-Start auf, damit ZDF, 3sat, ZDFinfo, ZDFneo und Phoenix im VPN erreichbar bleiben (optional)
-- **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch
-- **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau, auch wenn das Plugin geschlossen ist
+- **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch innerhalb von 60 Sekunden
+- **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist); die Getrennt-Meldung enthält einen Hinweis auf den automatischen Reconnect
 - **Autostart** beim Hochfahren der Box (optional)
 - **Zuletzt gewählte Länder** werden oben in der Länderliste angezeigt
 
@@ -157,7 +157,7 @@ IPv6 wird für die Dauer der VPN-Verbindung systemweit deaktiviert und beim Tren
 
 ### Watchdog
 
-Der Watchdog-Daemon läuft im Hintergrund und prüft alle 60 Sekunden, ob der OpenVPN-Prozess noch aktiv ist. Ist er abgestürzt, wird automatisch eine neue Verbindung aufgebaut.
+Der Watchdog-Daemon läuft im Hintergrund und prüft alle 60 Sekunden, ob der OpenVPN-Prozess noch aktiv ist. Ist er abgestürzt, wird automatisch eine neue Verbindung aufgebaut. Der Watchdog erkennt den VPN-Zustand zuverlässig auch nach einem Plugin- oder E2-Neustart.
 
 Beim manuellen Trennen über das Plugin wird der Watchdog beendet – es erfolgt keine automatische Wiederverbindung.
 

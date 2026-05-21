@@ -43,7 +43,7 @@ def read_config():
 
 def main():
     open(SELF_PID, "w").write(str(os.getpid()))
-    was_connected = False
+    was_connected = is_vpn_connected()
     while True:
         time.sleep(INTERVAL)
         connected = is_vpn_connected()

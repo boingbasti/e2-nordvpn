@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.6"
+VERSION = "1.7"
 
 import os
 import time
@@ -597,6 +597,8 @@ class NordVPNMain(Screen):
     skin = ""
 
     def __init__(self, session):
+        global _plugin_open
+        _plugin_open = True
         self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
         self._con_container = eConsoleAppContainer()
@@ -788,6 +790,8 @@ class NordVPNMain(Screen):
         self._session_tx_base = tx if tx is not None else 0
 
     def close(self):
+        global _plugin_open
+        _plugin_open = False
         self._timer.stop()
         self._city_timer.stop()
         Screen.close(self)
@@ -881,9 +885,6 @@ class NordVPNMain(Screen):
     def _open_settings(self):
         self.session.openWithCallback(lambda *a: self._update_status(), NordVPNSettings)
 
-    def close(self):
-        self._timer.stop()
-        Screen.close(self)
 
 
 # ---------------------------------------------------------------------------
@@ -896,18 +897,19 @@ def main(session, **kwargs):
 
 _status_timer = None
 _last_vpn_status = None
+_plugin_open = False
 
 
 def _check_vpn_status():
     global _last_vpn_status
     current = manager.is_connected()
     if _last_vpn_status is not None and current != _last_vpn_status:
-        if current:
+        if current and not _plugin_open:
             srv = manager.get_current_server()
             msg = ("NordVPN verbunden" + (" \xe2\x80\x93 " + srv if srv else "")).encode("utf-8")
             AddPopup(msg, MessageBox.TYPE_INFO, timeout=5, id="nordvpn_notify")
-        else:
-            AddPopup("NordVPN getrennt!", MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
+        elif not _plugin_open:
+            AddPopup("NordVPN getrennt! Reconnect in bis zu 60 Sek...", MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
     _last_vpn_status = current
 
 
