@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.8"
+VERSION = "1.8.1"
 
 import os
 import time
@@ -619,6 +619,7 @@ class NordVPNMain(Screen):
         self._log_buf = ""
         self._prev_connected = None
         self._connecting = False
+        self._skip_servers = []
         self._auth_timer = eTimer()
         self._auth_timer.callback.append(self._check_auth)
 
@@ -862,6 +863,7 @@ class NordVPNMain(Screen):
             )
             return
         self._connecting = True
+        self._skip_servers = []
         try:
             self._log_pos = os.path.getsize("/var/log/nordvpn.log")
         except Exception:
@@ -882,7 +884,9 @@ class NordVPNMain(Screen):
             return
         if self._con_container.running():
             return
-        skip = manager.get_current_server()
+        current = manager.get_current_server()
+        if current and current not in self._skip_servers:
+            self._skip_servers.append(current)
         self._connecting = True
         try:
             self._log_pos = os.path.getsize("/var/log/nordvpn.log")
@@ -898,7 +902,7 @@ class NordVPNMain(Screen):
         self["key_red"].setText("")
         self["key_green"].setText("")
         self["key_blue"].setText("")
-        self._con_container.execute(manager.get_connect_cmd_skip(skip))
+        self._con_container.execute(manager.get_connect_cmd_skip(self._skip_servers))
 
     def _disconnect(self):
         if self._dc_container.running():

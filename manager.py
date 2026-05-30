@@ -197,13 +197,13 @@ class NordVPNManager(object):
             self.get_server_type(),
         )
 
-    def get_connect_cmd_skip(self, skip_host):
+    def get_connect_cmd_skip(self, skip_hosts):
         return "%s %d %s %s %s" % (
             CONNECT_CMD,
             self.get_country_id(),
             self.get_protocol(),
             self.get_server_type(),
-            skip_host,
+            ",".join(skip_hosts),
         )
 
     def get_disconnect_cmd(self):
