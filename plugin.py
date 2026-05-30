@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.7"
+VERSION = "1.8"
 
 import os
 import time
@@ -633,7 +633,7 @@ class NordVPNMain(Screen):
         self["key_red"]     = Label("")
         self["key_green"]   = Label("")
         self["key_yellow"]  = Label("Einstellungen")
-        self["key_blue"]    = Label("Beenden")
+        self["key_blue"]    = Label("")
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
@@ -643,7 +643,7 @@ class NordVPNMain(Screen):
                 "green":  self._connect,
                 "red":    self._disconnect,
                 "yellow": self._open_settings,
-                "blue":   self.close,
+                "blue":   self._next_server,
             },
             -1,
         )
@@ -679,7 +679,8 @@ class NordVPNMain(Screen):
                     self._session_tx_base = tx if tx is not None else 0
                     self._save_session()
                 self._ip_timer.start(3000, True)
-                self._city_timer.start(4000, True)
+                if not self._connecting:
+                    self._city_timer.start(4000, True)
             else:
                 self._ip_timer.stop()
                 self._connect_time = None
@@ -698,6 +699,7 @@ class NordVPNMain(Screen):
             self["server_lbl"].setText(srv if srv else "")
             self["key_red"].setText("Trennen")
             self["key_green"].setText("")
+            self["key_blue"].setText("N\xc3\xa4chster Server")
             rx, tx = self._read_tun_bytes()
             dur = _fmt_duration(time.time() - self._connect_time) if self._connect_time else ""
             if rx is not None:
@@ -714,6 +716,7 @@ class NordVPNMain(Screen):
             self["server_lbl"].setText("")
             self["key_red"].setText("")
             self["key_green"].setText("Verbinden")
+            self["key_blue"].setText("")
         self["country_lbl"].setText(
             ("Land: %s  |  Protokoll: %s" % (
                 manager.get_country_name(),
@@ -790,8 +793,9 @@ class NordVPNMain(Screen):
         self._session_tx_base = tx if tx is not None else 0
 
     def close(self):
-        global _plugin_open
+        global _plugin_open, _last_vpn_status
         _plugin_open = False
+        _last_vpn_status = manager.is_connected()
         self._timer.stop()
         self._city_timer.stop()
         Screen.close(self)
@@ -835,6 +839,7 @@ class NordVPNMain(Screen):
             )
         else:
             self._auth_timer.start(10000, True)
+            self._city_timer.start(4000, True)
 
     def _on_disconnect_done(self, retval):
         self._update_status()
@@ -871,6 +876,29 @@ class NordVPNMain(Screen):
         self["key_red"].setText("")
         self["key_green"].setText("")
         self._con_container.execute(manager.get_connect_cmd())
+
+    def _next_server(self):
+        if not manager.is_connected():
+            return
+        if self._con_container.running():
+            return
+        skip = manager.get_current_server()
+        self._connecting = True
+        try:
+            self._log_pos = os.path.getsize("/var/log/nordvpn.log")
+        except Exception:
+            self._log_pos = 0
+        self._log_buf = ""
+        self["log_lbl"].setText("Verbinde mit n\xc3\xa4chstem Server...")
+        self["status_lbl"].setText("Verbinde...")
+        try:
+            self["status_lbl"].instance.setForegroundColor(gRGB(0xff, 0xff, 0xff))
+        except Exception:
+            pass
+        self["key_red"].setText("")
+        self["key_green"].setText("")
+        self["key_blue"].setText("")
+        self._con_container.execute(manager.get_connect_cmd_skip(skip))
 
     def _disconnect(self):
         if self._dc_container.running():

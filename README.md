@@ -38,6 +38,7 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 - **Mediathek-Fix** – löst CDN-Hostnamen vor dem VPN-Start auf, damit ZDF, 3sat, ZDFinfo, ZDFneo und Phoenix im VPN erreichbar bleiben (optional)
 - **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch innerhalb von 60 Sekunden
 - **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist); die Getrennt-Meldung enthält einen Hinweis auf den automatischen Reconnect
+- **Nächster Server** – bei bestehender Verbindung wechselt die Blaue Taste direkt zum nächstbesten Server der NordVPN-API (aktueller Server wird übersprungen)
 - **Autostart** beim Hochfahren der Box (optional)
 - **Zuletzt gewählte Länder** werden oben in der Länderliste angezeigt
 
@@ -139,7 +140,8 @@ Wenn aktiviert, verbindet das Plugin automatisch beim Starten der Box.
 | Grün | Verbinden |
 | Rot | Trennen |
 | Gelb | Einstellungen |
-| Blau | Plugin schließen |
+| Blau | Nächster Server (nur bei aktiver Verbindung) |
+| Exit / Back | Plugin schließen |
 
 Das Hauptfenster zeigt: Verbindungsstatus, aktueller Server, externe IP, Land, Protokoll, Stadt, Session-Traffic (DL/UL) und Verbindungsdauer – alles wird regelmäßig aktualisiert.
 

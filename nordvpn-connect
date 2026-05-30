@@ -13,6 +13,7 @@ import time
 COUNTRY_ID   = int(sys.argv[1]) if len(sys.argv) > 1 else 81
 PROTO        = sys.argv[2] if len(sys.argv) > 2 else "udp"
 SERVER_TYPE  = sys.argv[3] if len(sys.argv) > 3 else "standard"
+SKIP_HOST    = sys.argv[4] if len(sys.argv) > 4 else ""
 AUTH_FILE    = "/etc/openvpn/nordvpn_auth.txt"
 OVPN_CONFIG  = "/etc/openvpn/nordvpn.conf"
 PID_FILE     = "/var/run/openvpn.nordvpn.pid"
@@ -137,15 +138,19 @@ def fetch(url, timeout=15):
 
 def get_best_server():
     tech = "openvpn_%s" % PROTO
+    limit = 5 if SKIP_HOST else 1
     url = ("%s/servers/recommendations"
            "?filters[country_id]=%d"
            "&filters[servers_technologies][identifier]=%s"
-           "&limit=1") % (API_BASE, COUNTRY_ID, tech)
+           "&limit=%d") % (API_BASE, COUNTRY_ID, tech, limit)
     if SERVER_TYPE == "p2p":
         url += "&filters[servers_groups][identifier]=legacy_p2p"
     data = json.loads(fetch(url))
     if not data:
         return None
+    for entry in data:
+        if entry["hostname"] != SKIP_HOST:
+            return entry["hostname"]
     return data[0]["hostname"]
 
 
