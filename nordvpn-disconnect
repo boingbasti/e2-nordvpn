@@ -7,6 +7,8 @@ if [ -f "$WATCHDOG_PID_FILE" ]; then
     rm -f "$WATCHDOG_PID_FILE"
 fi
 
+rm -f /tmp/nordvpn_watchdog_skip.txt
+
 RESOLV_BACKUP="/etc/resolv.conf.nordvpn.bak"
 if [ -f "$RESOLV_BACKUP" ]; then
     cp "$RESOLV_BACKUP" /etc/resolv.conf

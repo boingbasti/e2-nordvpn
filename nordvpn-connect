@@ -19,12 +19,16 @@ OVPN_CONFIG  = "/etc/openvpn/nordvpn.conf"
 PID_FILE     = "/var/run/openvpn.nordvpn.pid"
 LOG_FILE     = "/var/log/nordvpn.log"
 SERVER_FILE  = "/tmp/nordvpn_server.txt"
+WATCHDOG_SKIP_FILE = "/tmp/nordvpn_watchdog_skip.txt"
 CONFIG_FILE  = "/etc/enigma2/nordvpn.conf"
 API_BASE     = "https://api.nordvpn.com/v1"
 
 HOSTS_FILE   = "/etc/hosts"
 HOSTS_MARKER = "# nordvpn-streaming-fix"
 CDN_HOSTS    = ["nrodlzdf-a.akamaihd.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix
+
+AUTH_CHECK_DELAY = 4
+MAX_ATTEMPTS = 5
 
 
 WATCHDOG_PID  = "/var/run/nordvpn-watchdog.pid"
@@ -164,25 +168,19 @@ def download_ovpn(hostname):
     return fetch(url, timeout=30)
 
 
-def main():
-    if not os.path.isfile(AUTH_FILE) or os.path.getsize(AUTH_FILE) < 5:
-        log("ERROR: No credentials found at %s" % AUTH_FILE)
-        log("Please configure your NordVPN Service Credentials in the plugin settings.")
-        sys.exit(1)
-
-    stop_existing()
-
-    log("Fetching best server for country ID %d..." % COUNTRY_ID)
+def _record_failed_server(hostname):
     try:
-        server = get_best_server()
-    except Exception as e:
-        log("ERROR: NordVPN API unreachable (%s)" % str(e))
-        sys.exit(1)
+        with open(WATCHDOG_SKIP_FILE) as f:
+            skip = [h for h in f.read().strip().split(",") if h]
+    except Exception:
+        skip = []
+    if hostname not in skip:
+        skip.append(hostname)
+    with open(WATCHDOG_SKIP_FILE, "w") as f:
+        f.write(",".join(skip))
 
-    if not server:
-        log("ERROR: No server found for country ID %d" % COUNTRY_ID)
-        sys.exit(1)
 
+def attempt_connect(server):
     log("Connecting to: %s" % server)
     open(SERVER_FILE, "w").write(server)
 
@@ -220,6 +218,8 @@ def main():
     if _get_streaming_fix():
         _pre_resolve_cdn()
 
+    log_pos = os.path.getsize(LOG_FILE) if os.path.isfile(LOG_FILE) else 0
+
     log("Starting OpenVPN...")
     ret = subprocess.call([
         "/usr/sbin/openvpn",
@@ -228,14 +228,73 @@ def main():
         "--config", OVPN_CONFIG,
     ])
 
-    if ret == 0:
-        log("SUCCESS: OpenVPN started, connecting to %s" % server)
-        _disable_ipv6()
-        _set_dns()
-        _restart_watchdog()
-    else:
+    if ret != 0:
         log("ERROR: OpenVPN failed to start (exit %d)" % ret)
         sys.exit(1)
+
+    time.sleep(AUTH_CHECK_DELAY)
+    try:
+        with open(LOG_FILE) as f:
+            f.seek(log_pos)
+            new_log = f.read()
+    except Exception:
+        new_log = ""
+
+    if "AUTH_FAILED" in new_log:
+        log("Server %s lehnt Zugangsdaten ab, versuche n\xc3\xa4chsten Server..." % server)
+        try:
+            pid = open(PID_FILE).read().strip()
+            if pid and os.path.isdir("/proc/%s" % pid):
+                os.kill(int(pid), 15)
+        except Exception:
+            pass
+        try:
+            os.remove(PID_FILE)
+        except Exception:
+            pass
+        _record_failed_server(server)
+        return False
+
+    log("SUCCESS: OpenVPN started, connecting to %s" % server)
+    _disable_ipv6()
+    _set_dns()
+    _restart_watchdog()
+    return True
+
+
+def main():
+    if not os.path.isfile(AUTH_FILE) or os.path.getsize(AUTH_FILE) < 5:
+        log("ERROR: No credentials found at %s" % AUTH_FILE)
+        log("Please configure your NordVPN Service Credentials in the plugin settings.")
+        sys.exit(1)
+
+    stop_existing()
+
+    if not SKIP_HOSTS:
+        try:
+            os.remove(WATCHDOG_SKIP_FILE)
+        except Exception:
+            pass
+
+    for attempt in range(MAX_ATTEMPTS):
+        log("Fetching best server for country ID %d..." % COUNTRY_ID)
+        try:
+            server = get_best_server()
+        except Exception as e:
+            log("ERROR: NordVPN API unreachable (%s)" % str(e))
+            sys.exit(1)
+
+        if not server:
+            log("ERROR: No server found for country ID %d" % COUNTRY_ID)
+            sys.exit(1)
+
+        if attempt_connect(server):
+            return
+
+        SKIP_HOSTS.append(server)
+
+    log("ERROR: Alle versuchten Server haben die Zugangsdaten abgelehnt")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

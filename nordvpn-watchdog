@@ -10,7 +10,11 @@ PID_FILE    = "/var/run/openvpn.nordvpn.pid"
 CONNECT_CMD = "/usr/sbin/nordvpn-connect"
 CONFIG_FILE = "/etc/enigma2/nordvpn.conf"
 SELF_PID    = "/var/run/nordvpn-watchdog.pid"
+SERVER_FILE = "/tmp/nordvpn_server.txt"
+SKIP_FILE   = "/tmp/nordvpn_watchdog_skip.txt"
 INTERVAL = 60
+FAST_INTERVAL = 10
+FAST_DURATION = 120
 
 
 def is_vpn_connected():
@@ -41,19 +45,47 @@ def read_config():
     return country_id, proto, server_type
 
 
+def read_skip_list():
+    try:
+        with open(SKIP_FILE) as f:
+            return [h for h in f.read().strip().split(",") if h]
+    except Exception:
+        return []
+
+
+def add_failed_server():
+    try:
+        with open(SERVER_FILE) as f:
+            failed = f.read().strip()
+    except Exception:
+        return
+    if not failed:
+        return
+    skip = read_skip_list()
+    if failed not in skip:
+        skip.append(failed)
+    with open(SKIP_FILE, "w") as f:
+        f.write(",".join(skip))
+
+
 def main():
     open(SELF_PID, "w").write(str(os.getpid()))
     was_connected = is_vpn_connected()
+    start_time = time.time()
     while True:
-        time.sleep(INTERVAL)
+        elapsed = time.time() - start_time
+        interval = FAST_INTERVAL if elapsed < FAST_DURATION else INTERVAL
+        time.sleep(interval)
         connected = is_vpn_connected()
         if connected:
             was_connected = True
             continue
         if not was_connected:
             continue
+        add_failed_server()
         country_id, proto, server_type = read_config()
-        subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type])
+        skip = read_skip_list()
+        subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
 
 
 if __name__ == "__main__":

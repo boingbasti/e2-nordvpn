@@ -8,6 +8,7 @@ AUTH_FILE = "/etc/openvpn/nordvpn_auth.txt"
 PID_FILE = "/var/run/openvpn.nordvpn.pid"
 SERVER_FILE = "/tmp/nordvpn_server.txt"
 LOG_FILE = "/var/log/nordvpn.log"
+WATCHDOG_SKIP_FILE = "/tmp/nordvpn_watchdog_skip.txt"
 
 CONNECT_CMD    = "/usr/sbin/nordvpn-connect"
 DISCONNECT_CMD = "/usr/sbin/nordvpn-disconnect"
@@ -189,21 +190,27 @@ class NordVPNManager(object):
         except Exception:
             pass
 
+    def get_watchdog_skip_list(self):
+        try:
+            with open(WATCHDOG_SKIP_FILE) as f:
+                return [h for h in f.read().strip().split(",") if h]
+        except Exception:
+            return []
+
     def get_connect_cmd(self):
-        return "%s %d %s %s" % (
-            CONNECT_CMD,
-            self.get_country_id(),
-            self.get_protocol(),
-            self.get_server_type(),
-        )
+        return self.get_connect_cmd_skip([])
 
     def get_connect_cmd_skip(self, skip_hosts):
+        skip = list(skip_hosts)
+        for h in self.get_watchdog_skip_list():
+            if h not in skip:
+                skip.append(h)
         return "%s %d %s %s %s" % (
             CONNECT_CMD,
             self.get_country_id(),
             self.get_protocol(),
             self.get_server_type(),
-            ",".join(skip_hosts),
+            ",".join(skip),
         )
 
     def get_disconnect_cmd(self):

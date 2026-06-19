@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.8.1"
+VERSION = "1.9"
 
 import os
 import time
@@ -620,8 +620,6 @@ class NordVPNMain(Screen):
         self._prev_connected = None
         self._connecting = False
         self._skip_servers = []
-        self._auth_timer = eTimer()
-        self._auth_timer.callback.append(self._check_auth)
 
         self["title_lbl"]    = Label("NordVPN v%s" % VERSION)
         self["status_lbl"]   = Label("")
@@ -679,9 +677,10 @@ class NordVPNMain(Screen):
                     self._session_rx_base = rx if rx is not None else 0
                     self._session_tx_base = tx if tx is not None else 0
                     self._save_session()
-                self._ip_timer.start(3000, True)
                 if not self._connecting:
+                    self._ip_timer.start(3000, True)
                     self._city_timer.start(4000, True)
+                    self["log_lbl"].setText("")
             else:
                 self._ip_timer.stop()
                 self._connect_time = None
@@ -806,32 +805,10 @@ class NordVPNMain(Screen):
         self._log_buf = "\n".join(lines[-9:]) + "\n"
         self["log_lbl"].setText(self._log_buf.strip())
 
-    def _check_auth(self):
-        if not self._connecting:
-            return
-        self._connecting = False
-        try:
-            with open("/var/log/nordvpn.log") as f:
-                f.seek(self._log_pos)
-                new_log = f.read()
-        except Exception:
-            return
-        if "AUTH_FAILED" not in new_log:
-            return
-        lines = [l.split(" ", 4)[-1] for l in new_log.strip().splitlines() if l.strip()]
-        self._log_buf += "\n".join(lines[-4:])
-        self["log_lbl"].setText("\n".join(self._log_buf.strip().splitlines()[-9:]))
-        self.session.open(
-            MessageBox,
-            "Verbindung fehlgeschlagen: Zugangsdaten ung\xc3\xbcltig.",
-            MessageBox.TYPE_ERROR,
-            timeout=8,
-        )
-
     def _on_connect_done(self, retval):
-        self._update_status()
+        self._connecting = False
         if retval != 0:
-            self._connecting = False
+            self._update_status()
             self.session.open(
                 MessageBox,
                 "Fehler beim Verbinden:\n" + self._log_buf[-300:],
@@ -839,13 +816,15 @@ class NordVPNMain(Screen):
                 timeout=8,
             )
         else:
-            self._auth_timer.start(10000, True)
-            self._city_timer.start(4000, True)
+            self._prev_connected = False
+            self._update_status()
 
     def _on_disconnect_done(self, retval):
         self._update_status()
 
     def _connect(self):
+        if manager.is_connected():
+            return
         if not manager.has_auth():
             self.session.open(
                 MessageBox,
@@ -864,10 +843,6 @@ class NordVPNMain(Screen):
             return
         self._connecting = True
         self._skip_servers = []
-        try:
-            self._log_pos = os.path.getsize("/var/log/nordvpn.log")
-        except Exception:
-            self._log_pos = 0
         self._log_buf = ""
         self["log_lbl"].setText("Verbinde...")
         self["status_lbl"].setText("Verbinde...")
@@ -888,10 +863,6 @@ class NordVPNMain(Screen):
         if current and current not in self._skip_servers:
             self._skip_servers.append(current)
         self._connecting = True
-        try:
-            self._log_pos = os.path.getsize("/var/log/nordvpn.log")
-        except Exception:
-            self._log_pos = 0
         self._log_buf = ""
         self["log_lbl"].setText("Verbinde mit n\xc3\xa4chstem Server...")
         self["status_lbl"].setText("Verbinde...")
