@@ -118,17 +118,37 @@ def _restart_watchdog():
     subprocess.Popen(["python", WATCHDOG_CMD], stdout=devnull, stderr=devnull)
 
 
-def stop_existing():
-    if not os.path.isfile(PID_FILE):
-        return
+def _find_openvpn_pids():
+    pids = []
     try:
-        pid = open(PID_FILE).read().strip()
-        if pid and os.path.isdir("/proc/%s" % pid):
-            log("Stopping existing connection...")
-            os.kill(int(pid), 15)
-            time.sleep(2)
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open("/proc/%s/cmdline" % entry) as f:
+                    cmdline = f.read()
+            except Exception:
+                continue
+            if "openvpn" in cmdline and OVPN_CONFIG in cmdline:
+                pids.append(entry)
     except Exception:
         pass
+    return pids
+
+
+def stop_existing():
+    # Killt alle laufenden OpenVPN-Prozesse mit unserer Config, nicht nur die
+    # PID aus der Datei - verhindert verwaiste Tunnel nach einem unsauberen
+    # E2-Neustart oder Race zwischen mehreren Connect-Versuchen.
+    pids = _find_openvpn_pids()
+    for pid in pids:
+        try:
+            os.kill(int(pid), 15)
+        except Exception:
+            pass
+    if pids:
+        log("Stopping %d existing connection(s)..." % len(pids))
+        time.sleep(2)
     try:
         os.remove(PID_FILE)
     except Exception:

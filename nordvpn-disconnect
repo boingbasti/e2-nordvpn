@@ -29,20 +29,31 @@ fi
 
 PID_FILE="/var/run/openvpn.nordvpn.pid"
 
-if [ ! -f "$PID_FILE" ]; then
-    echo "Not connected"
-    exit 0
-fi
-
-PID=$(cat "$PID_FILE" 2>/dev/null)
-if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
-    kill "$PID" 2>/dev/null
-    sleep 1
-    if [ -d "/proc/$PID" ]; then
-        kill -9 "$PID" 2>/dev/null
+# Killt alle laufenden OpenVPN-Prozesse mit unserer Config, nicht nur die
+# PID aus der Datei - findet auch verwaiste Tunnel ohne (oder mit
+# veralteter) PID-Datei, z.B. nach einem unsauberen E2-Neustart.
+KILLED=0
+for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+    if grep -q "openvpn" "/proc/$pid/cmdline" 2>/dev/null && grep -q "nordvpn.conf" "/proc/$pid/cmdline" 2>/dev/null; then
+        kill "$pid" 2>/dev/null
+        KILLED=1
     fi
+done
+
+if [ "$KILLED" = "1" ]; then
+    sleep 1
+    for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+        if grep -q "openvpn" "/proc/$pid/cmdline" 2>/dev/null && grep -q "nordvpn.conf" "/proc/$pid/cmdline" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null
+        fi
+    done
 fi
 
 rm -f "$PID_FILE"
 rm -f /etc/openvpn/nordvpn.conf
-echo "Disconnected"
+
+if [ "$KILLED" = "1" ]; then
+    echo "Disconnected"
+else
+    echo "Not connected"
+fi

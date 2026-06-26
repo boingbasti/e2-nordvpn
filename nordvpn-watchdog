@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import subprocess
+import traceback
 import ConfigParser
 
 PID_FILE    = "/var/run/openvpn.nordvpn.pid"
@@ -12,6 +13,7 @@ CONFIG_FILE = "/etc/enigma2/nordvpn.conf"
 SELF_PID    = "/var/run/nordvpn-watchdog.pid"
 SERVER_FILE = "/tmp/nordvpn_server.txt"
 SKIP_FILE   = "/tmp/nordvpn_watchdog_skip.txt"
+ERROR_LOG   = "/var/log/nordvpn-watchdog-error.log"
 INTERVAL = 60
 FAST_INTERVAL = 10
 FAST_DURATION = 120
@@ -68,24 +70,38 @@ def add_failed_server():
         f.write(",".join(skip))
 
 
+def _log_error():
+    try:
+        with open(ERROR_LOG, "a") as f:
+            f.write(time.strftime("%a %b %d %H:%M:%S %Y") + "\n")
+            f.write(traceback.format_exc())
+            f.write("\n")
+    except Exception:
+        pass
+
+
 def main():
     open(SELF_PID, "w").write(str(os.getpid()))
     was_connected = is_vpn_connected()
     start_time = time.time()
     while True:
-        elapsed = time.time() - start_time
-        interval = FAST_INTERVAL if elapsed < FAST_DURATION else INTERVAL
-        time.sleep(interval)
-        connected = is_vpn_connected()
-        if connected:
-            was_connected = True
-            continue
-        if not was_connected:
-            continue
-        add_failed_server()
-        country_id, proto, server_type = read_config()
-        skip = read_skip_list()
-        subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
+        try:
+            elapsed = time.time() - start_time
+            interval = FAST_INTERVAL if elapsed < FAST_DURATION else INTERVAL
+            time.sleep(interval)
+            connected = is_vpn_connected()
+            if connected:
+                was_connected = True
+                continue
+            if not was_connected:
+                continue
+            add_failed_server()
+            country_id, proto, server_type = read_config()
+            skip = read_skip_list()
+            subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
+        except Exception:
+            _log_error()
+            time.sleep(5)
 
 
 if __name__ == "__main__":
