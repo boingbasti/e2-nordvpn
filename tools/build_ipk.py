@@ -6,7 +6,7 @@ import tarfile
 import io
 
 PLUGIN_NAME   = "enigma2-plugin-extensions-nordvpn"
-VERSION       = "1.9.1"
+VERSION       = "1.9.2"
 ARCHITECTURE  = "all"
 MAINTAINER    = "saufsoldat"
 DESCRIPTION   = "NordVPN OpenVPN-Client fuer Enigma2"
@@ -61,6 +61,7 @@ rm -f /tmp/nordvpn_countries.json
 rm -f /tmp/nordvpn_session
 rm -f /tmp/nordvpn_extip.txt
 rm -f /etc/resolv.conf.nordvpn.bak
+rm -f /tmp/nordvpn_ipv6_states
 if [ "$1" != "upgrade" ]; then
     rm -f /etc/openvpn/nordvpn_auth.txt
     rm -f /etc/enigma2/nordvpn.conf

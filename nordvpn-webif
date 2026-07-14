@@ -5,9 +5,17 @@
 import os
 import sys
 import signal
-import urllib
 import threading
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+
+try:
+    from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+except ImportError:
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+try:
+    from urlparse import parse_qs
+except ImportError:
+    from urllib.parse import parse_qs
 
 PORT       = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 AUTH_FILE  = "/etc/openvpn/nordvpn_auth.txt"
@@ -75,6 +83,14 @@ def get_current_username():
         return ""
 
 
+def mask_username(username):
+    if not username:
+        return ""
+    if len(username) > 6:
+        return username[:3] + "..." + username[-3:]
+    return "***"
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -97,19 +113,22 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
         else:
-            self._send_html(HTML.replace("__USERNAME__", get_current_username()))
+            self._send_html(HTML.replace("__USERNAME__", mask_username(get_current_username())))
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
-        params = {}
-        for part in body.split("&"):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                params[k] = urllib.unquote_plus(v)
+        if not isinstance(body, str):
+            body = body.decode("utf-8", "ignore")
+        params = parse_qs(body)
 
-        username = params.get("username", "").strip()
-        password = params.get("password", "").strip()
+        username = params.get("username", [""])[0].strip()
+        password = params.get("password", [""])[0].strip()
+
+        old_username = get_current_username()
+        masked_username = mask_username(old_username)
+        if username == masked_username or not username:
+            username = old_username
 
         if username and password:
             auth_dir = os.path.dirname(AUTH_FILE)
@@ -121,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_html(HTML_SUCCESS)
             threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
         else:
-            self._send_html(HTML.replace("__USERNAME__", get_current_username()))
+            self._send_html(HTML.replace("__USERNAME__", mask_username(get_current_username())))
 
 
 def cleanup(signum, frame):

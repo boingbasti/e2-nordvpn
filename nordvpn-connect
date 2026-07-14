@@ -5,7 +5,10 @@
 
 import sys
 import os
-import urllib2
+try:
+    import urllib2
+except ImportError:
+    import urllib.request as urllib2
 import json
 import subprocess
 import time
@@ -39,13 +42,16 @@ NORDVPN_DNS   = ["103.86.96.100", "103.86.99.100"]
 
 
 def log(msg):
-    print msg
+    print(msg)
     sys.stdout.flush()
 
 
 def _get_streaming_fix():
     try:
-        import ConfigParser
+        try:
+            import ConfigParser
+        except ImportError:
+            import configparser as ConfigParser
         cfg = ConfigParser.SafeConfigParser()
         cfg.read(CONFIG_FILE)
         return cfg.get("nordvpn", "streaming_fix") == "1"
@@ -81,15 +87,39 @@ def _pre_resolve_cdn():
             f.writelines(entries)
 
 
+def _get_dns_servers():
+    try:
+        try:
+            import ConfigParser
+        except ImportError:
+            import configparser as ConfigParser
+        cfg = ConfigParser.SafeConfigParser()
+        cfg.read(CONFIG_FILE)
+        try:
+            dns_type = cfg.get("nordvpn", "dns_type")
+        except Exception:
+            dns_type = "nordvpn"
+    except Exception:
+        dns_type = "nordvpn"
+
+    if dns_type == "google":
+        return ["8.8.8.8", "8.8.4.4"]
+    elif dns_type == "cloudflare":
+        return ["1.1.1.1", "1.0.0.1"]
+    else:  # nordvpn or default
+        return ["103.86.96.100", "103.86.99.100"]
+
+
 def _set_dns():
     try:
         import shutil
         shutil.copy2(RESOLV_CONF, RESOLV_BACKUP)
+        dns_servers = _get_dns_servers()
         with open(RESOLV_CONF, "w") as f:
             f.write("# NordVPN\n")
-            for dns in NORDVPN_DNS:
+            for dns in dns_servers:
                 f.write("nameserver %s\n" % dns)
-        log("DNS set to NordVPN (%s)" % ", ".join(NORDVPN_DNS))
+        log("DNS set to %s" % ", ".join(dns_servers))
     except Exception as e:
         log("WARNING: Could not set DNS: %s" % str(e))
 
@@ -97,23 +127,48 @@ def _set_dns():
 def _disable_ipv6():
     try:
         import glob
+        states = []
         for path in glob.glob("/proc/sys/net/ipv6/conf/*/disable_ipv6"):
             iface = path.split("/")[5]
             if iface != "lo":
-                open(path, "w").write("1\n")
-        log("IPv6 disabled")
+                try:
+                    with open(path, "r") as f:
+                        orig = f.read().strip()
+                    states.append("%s=%s" % (path, orig))
+                except Exception:
+                    pass
+                with open(path, "w") as f:
+                    f.write("1\n")
+        if states:
+            with open("/tmp/nordvpn_ipv6_states", "w") as f:
+                f.write("\n".join(states) + "\n")
+        log("IPv6 disabled and states backed up")
     except Exception as e:
         log("WARNING: Could not disable IPv6: %s" % str(e))
 
 
+def _kill_all_watchdogs():
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open("/proc/%s/cmdline" % entry) as f:
+                    cmdline = f.read()
+            except Exception:
+                continue
+            if "nordvpn-watchdog" in cmdline:
+                try:
+                    os.kill(int(entry), 15)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def _restart_watchdog():
-    if os.path.isfile(WATCHDOG_PID):
-        try:
-            pid = int(open(WATCHDOG_PID).read().strip())
-            os.kill(pid, 15)
-            time.sleep(0.5)
-        except Exception:
-            pass
+    _kill_all_watchdogs()
+    time.sleep(0.5)
     devnull = open(os.devnull, "w")
     subprocess.Popen(["python", WATCHDOG_CMD], stdout=devnull, stderr=devnull)
 
@@ -252,30 +307,80 @@ def attempt_connect(server):
         log("ERROR: OpenVPN failed to start (exit %d)" % ret)
         sys.exit(1)
 
-    time.sleep(AUTH_CHECK_DELAY)
-    try:
-        with open(LOG_FILE) as f:
-            f.seek(log_pos)
-            new_log = f.read()
-    except Exception:
-        new_log = ""
+    success = False
+    pid = ""
+    for _ in range(40):  # Poll for up to 20 seconds (40 * 0.5s)
+        time.sleep(0.5)
 
-    if "AUTH_FAILED" in new_log:
-        log("Server %s lehnt Zugangsdaten ab, versuche n\xc3\xa4chsten Server..." % server)
+        # Check if process is still running
+        pid_active = False
         try:
-            pid = open(PID_FILE).read().strip()
+            with open(PID_FILE) as f:
+                pid = f.read().strip()
             if pid and os.path.isdir("/proc/%s" % pid):
-                os.kill(int(pid), 15)
+                pid_active = True
         except Exception:
             pass
+
+        if not pid_active:
+            log("ERROR: OpenVPN process terminated prematurely")
+            break
+
+        # Read log
+        try:
+            with open(LOG_FILE) as f:
+                f.seek(log_pos)
+                new_log = f.read()
+        except Exception:
+            new_log = ""
+
+        if "AUTH_FAILED" in new_log:
+            log("Server %s lehnt Zugangsdaten ab, versuche naechsten Server..." % server)
+            try:
+                os.kill(int(pid), 15)
+            except Exception:
+                pass
+            try:
+                os.remove(PID_FILE)
+            except Exception:
+                pass
+            _record_failed_server(server)
+            return False
+
+        if "Initialization Sequence Completed" in new_log:
+            log("SUCCESS: OpenVPN started, connecting to %s" % server)
+            success = True
+            break
+
+    if not success:
+        log("ERROR: Connection timed out or failed to establish")
+        if pid:
+            try:
+                os.kill(int(pid), 15)
+            except Exception:
+                pass
         try:
             os.remove(PID_FILE)
         except Exception:
             pass
-        _record_failed_server(server)
         return False
 
-    log("SUCCESS: OpenVPN started, connecting to %s" % server)
+    try:
+        rx, tx = 0, 0
+        if os.path.isfile("/proc/net/dev"):
+            with open("/proc/net/dev") as f:
+                for line in f:
+                    if "tun" in line:
+                        parts = line.replace(":", " ").split()
+                        if len(parts) > 9:
+                            rx = int(parts[1])
+                            tx = int(parts[9])
+                        break
+        with open("/tmp/nordvpn_session", "w") as f:
+            f.write("%f %d %d" % (time.time(), rx, tx))
+    except Exception:
+        pass
+
     _disable_ipv6()
     _set_dns()
     _restart_watchdog()

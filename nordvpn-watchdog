@@ -5,7 +5,10 @@ import sys
 import time
 import subprocess
 import traceback
-import ConfigParser
+try:
+    import ConfigParser
+except ImportError:
+    import configparser as ConfigParser
 
 PID_FILE    = "/var/run/openvpn.nordvpn.pid"
 CONNECT_CMD = "/usr/sbin/nordvpn-connect"

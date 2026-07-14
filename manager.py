@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
 import json
-import ConfigParser
+try:
+    import ConfigParser
+except ImportError:
+    import configparser as ConfigParser
 
 CONFIG_FILE = "/etc/enigma2/nordvpn.conf"
 AUTH_FILE = "/etc/openvpn/nordvpn_auth.txt"
@@ -87,6 +90,12 @@ class NordVPNManager(object):
     def set_streaming_fix(self, enabled):
         self._set("streaming_fix", "1" if enabled else "0")
 
+    def get_dns_type(self):
+        return self._get("dns_type", "nordvpn")
+
+    def set_dns_type(self, dtype):
+        self._set("dns_type", dtype)
+
     def save_credentials(self, username, password):
         auth_dir = os.path.dirname(AUTH_FILE)
         if not os.path.isdir(auth_dir):
@@ -158,16 +167,19 @@ class NordVPNManager(object):
         import socket
         import fcntl
         import struct
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            ip = socket.inet_ntoa(fcntl.ioctl(
-                s.fileno(), 0x8915,
-                struct.pack("256s", "eth0"[:15])
-            )[20:24])
-            s.close()
-            return ip
-        except Exception:
-            return "?"
+        for iface in ("eth0", "wlan0", "eth1", "wlan1", "lan0"):
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                ip = socket.inet_ntoa(fcntl.ioctl(
+                    s.fileno(), 0x8915,
+                    struct.pack("256s", iface[:15])
+                )[20:24])
+                s.close()
+                if ip and ip != "127.0.0.1":
+                    return ip
+            except Exception:
+                pass
+        return "?"
 
     def get_webif_url(self):
         return "http://%s:%d" % (self.get_box_ip(), WEBIF_PORT)

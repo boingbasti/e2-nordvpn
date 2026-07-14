@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.9.1"
+VERSION = "1.9.2"
 
 import os
 import time
@@ -23,6 +23,28 @@ except Exception:
 from Tools.Notifications import AddPopup
 from Plugins.Extensions.NordVPN.manager import manager
 
+import sys
+PY3 = sys.version_info[0] >= 3
+
+if PY3:
+    unicode = str
+    def to_unicode(s):
+        if isinstance(s, bytes):
+            return s.decode("utf-8", "ignore")
+        return str(s)
+    def to_native_str(s):
+        if isinstance(s, bytes):
+            return s.decode("utf-8", "ignore")
+        return str(s)
+else:
+    def to_unicode(s):
+        if isinstance(s, str):
+            return s.decode("utf-8", "ignore")
+        return unicode(s)
+    def to_native_str(s):
+        if isinstance(s, unicode):
+            return s.encode("utf-8")
+        return str(s)
 
 # ---------------------------------------------------------------------------
 # Country selection screen
@@ -85,10 +107,10 @@ class NordVPNCountryList(Screen):
         Screen.__init__(self, session)
         self._countries = []
 
-        self["title_lbl"] = Label("Land ausw\xc3\xa4hlen")
+        self["title_lbl"] = Label(to_native_str(u"Land auswählen"))
         self["list"]     = MenuList([])
-        self["key_red"]  = Label("Abbrechen")
-        self["key_hint"] = Label("OK = Ausw\xc3\xa4hlen")
+        self["key_red"]  = Label(to_native_str(u"Abbrechen"))
+        self["key_hint"] = Label(to_native_str(u"OK = Auswählen"))
         self["actions"]  = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {"ok": self._select, "cancel": self.close, "red": self.close},
@@ -106,20 +128,20 @@ class NordVPNCountryList(Screen):
             with open(self._json_file) as f:
                 data = json.load(f)
             all_countries = sorted(
-                [(c["name"].encode("utf-8"), c["id"]) for c in data],
+                [(to_native_str(c["name"]), c["id"]) for c in data],
                 key=lambda x: x[0],
             )
             recent = manager.get_recent_countries()
             self._countries = []
             display = []
             if recent:
-                display.append("  -- Zuletzt gew\xc3\xa4hlt --")
+                display.append(to_native_str(u"  -- Zuletzt gewählt --"))
                 self._countries.append(None)
                 for cid, cname in recent:
-                    name = cname.encode("utf-8") if isinstance(cname, unicode) else cname
+                    name = to_native_str(cname)
                     self._countries.append((name, cid))
                     display.append("  " + name)
-                display.append("  -- Alle L\xc3\xa4nder --")
+                display.append(to_native_str(u"  -- Alle Länder --"))
                 self._countries.append(None)
             for item in all_countries:
                 self._countries.append(item)
@@ -128,7 +150,7 @@ class NordVPNCountryList(Screen):
         except Exception as e:
             self.session.open(
                 MessageBox,
-                "L\xc3\xa4nderliste konnte nicht geladen werden:\n%s" % str(e),
+                to_native_str(u"Länderliste konnte nicht geladen werden:\n%s") % to_unicode(str(e)),
                 MessageBox.TYPE_ERROR,
                 timeout=5,
             )
@@ -322,14 +344,15 @@ class NordVPNSettings(Screen):
     _IDX_WEBIF   = 4
     _IDX_STYPE   = 5
     _IDX_SFIX    = 6
+    _IDX_DNS     = 7
 
     def __init__(self, session):
         self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
-        self["title_lbl"] = Label("Einstellungen")
+        self["title_lbl"] = Label(to_native_str(u"Einstellungen"))
         self["list"]     = MenuList([])
-        self["key_red"]  = Label("Zur\xc3\xbcck")
-        self["key_hint"] = Label("OK = \xc3\x84ndern")
+        self["key_red"]  = Label(to_native_str(u"Zurück"))
+        self["key_hint"] = Label(to_native_str(u"OK = Ändern"))
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions"],
             {
@@ -348,20 +371,23 @@ class NordVPNSettings(Screen):
         self._refresh()
 
     def _entries(self):
-        creds = "*** gesetzt ***" if manager.has_auth() else "(nicht gesetzt)"
-        proto = manager.get_protocol().upper()
-        auto  = "Ein" if manager.get_autostart() else "Aus"
-        webif = ("L\xc3\xa4uft  (Port %d)" % 8765) if manager.is_webif_running() else "Starten"
-        stype = "P2P" if manager.get_server_type() == "p2p" else "Standard"
-        sfix  = "Ein" if manager.get_streaming_fix() else "Aus"
+        creds = to_native_str(u"*** gesetzt ***" if manager.has_auth() else u"(nicht gesetzt)")
+        proto = to_native_str(manager.get_protocol().upper())
+        auto  = to_native_str(u"Ein" if manager.get_autostart() else u"Aus")
+        webif = to_native_str(u"Läuft  (Port %d)" % 8765) if manager.is_webif_running() else to_native_str(u"Starten")
+        stype = to_native_str(u"P2P" if manager.get_server_type() == "p2p" else u"Standard")
+        sfix  = to_native_str(u"Ein" if manager.get_streaming_fix() else u"Aus")
+        dns_names = {"nordvpn": u"NordVPN (Standard)", "google": u"Google (8.8.8.8)", "cloudflare": u"Cloudflare (1.1.1.1)"}
+        dns_val = to_native_str(dns_names.get(manager.get_dns_type(), u"NordVPN (Standard)"))
         return [
-            "Zugangsdaten:   " + creds,
-            "Land:           " + manager.get_country_name(),
-            "Protokoll:      " + proto,
-            "Autostart:      " + auto,
-            "Zugangsdaten per WebIF: " + webif,
-            "Server-Typ:     " + stype,
-            "Mediathek-Fix:  " + sfix,
+            to_native_str(u"Zugangsdaten:   ") + creds,
+            to_native_str(u"Land:           ") + to_native_str(manager.get_country_name()),
+            to_native_str(u"Protokoll:      ") + proto,
+            to_native_str(u"Autostart:      ") + auto,
+            to_native_str(u"Zugangsdaten per WebIF: ") + webif,
+            to_native_str(u"Server-Typ:     ") + stype,
+            to_native_str(u"Mediathek-Fix:  ") + sfix,
+            to_native_str(u"DNS-Server:     ") + dns_val,
         ]
 
     def _refresh(self):
@@ -383,6 +409,8 @@ class NordVPNSettings(Screen):
             self._toggle_stype()
         elif idx == self._IDX_SFIX:
             self._toggle_sfix()
+        elif idx == self._IDX_DNS:
+            self._toggle_dns()
 
     def _refresh_cb(self, result=None):
         self._refresh()
@@ -407,6 +435,16 @@ class NordVPNSettings(Screen):
 
     def _toggle_sfix(self):
         manager.set_streaming_fix(not manager.get_streaming_fix())
+        self._refresh()
+
+    def _toggle_dns(self):
+        dns_list = ["nordvpn", "google", "cloudflare"]
+        current = manager.get_dns_type()
+        try:
+            next_idx = (dns_list.index(current) + 1) % len(dns_list)
+        except ValueError:
+            next_idx = 0
+        manager.set_dns_type(dns_list[next_idx])
         self._refresh()
 
     def _check_webif(self):
@@ -444,6 +482,8 @@ class NordVPNSettings(Screen):
             self._toggle_stype()
         elif idx == self._IDX_SFIX:
             self._toggle_sfix()
+        elif idx == self._IDX_DNS:
+            self._toggle_dns()
 
     def _keyRight(self):
         self._keyLeft()
@@ -693,35 +733,35 @@ class NordVPNMain(Screen):
                 self["transfer_lbl"].setText("")
             self._prev_connected = connected
         if connected:
-            self["status_lbl"].setText("Verbunden")
+            self["status_lbl"].setText(to_native_str(u"Verbunden"))
             self._set_status_color(True)
             srv = manager.get_current_server()
-            self["server_lbl"].setText(srv if srv else "")
-            self["key_red"].setText("Trennen")
+            self["server_lbl"].setText(to_native_str(srv) if srv else "")
+            self["key_red"].setText(to_native_str(u"Trennen"))
             self["key_green"].setText("")
-            self["key_blue"].setText("N\xc3\xa4chster Server")
+            self["key_blue"].setText(to_native_str(u"Nächster Server"))
             rx, tx = self._read_tun_bytes()
             dur = _fmt_duration(time.time() - self._connect_time) if self._connect_time else ""
             if rx is not None:
                 dl = rx - self._session_rx_base
                 ul = tx - self._session_tx_base
                 self["transfer_lbl"].setText(
-                    "DL: %s   UL: %s   |   Verbunden seit: %s" % (_fmt_bytes(dl), _fmt_bytes(ul), dur)
+                    to_native_str(u"DL: %s   UL: %s   |   Verbunden seit: %s" % (_fmt_bytes(dl), _fmt_bytes(ul), dur))
                 )
             elif dur:
-                self["transfer_lbl"].setText("Verbunden seit: %s" % dur)
+                self["transfer_lbl"].setText(to_native_str(u"Verbunden seit: %s" % dur))
         else:
-            self["status_lbl"].setText("Getrennt")
+            self["status_lbl"].setText(to_native_str(u"Getrennt"))
             self._set_status_color(False)
             self["server_lbl"].setText("")
             self["key_red"].setText("")
-            self["key_green"].setText("Verbinden")
+            self["key_green"].setText(to_native_str(u"Verbinden"))
             self["key_blue"].setText("")
         self["country_lbl"].setText(
-            ("Land: %s  |  Protokoll: %s" % (
-                manager.get_country_name(),
-                manager.get_protocol().upper(),
-            )).encode("utf-8")
+            to_native_str(u"Land: %s  |  Protokoll: %s" % (
+                to_unicode(manager.get_country_name()),
+                to_unicode(manager.get_protocol().upper()),
+            ))
         )
 
     def _fetch_ip(self):
@@ -909,10 +949,12 @@ def _check_vpn_status():
     if _last_vpn_status is not None and current != _last_vpn_status:
         if current and not _plugin_open:
             srv = manager.get_current_server()
-            msg = ("NordVPN verbunden" + (" \xe2\x80\x93 " + srv if srv else "")).encode("utf-8")
-            AddPopup(msg, MessageBox.TYPE_INFO, timeout=5, id="nordvpn_notify")
+            msg = to_unicode(u"NordVPN verbunden")
+            if srv:
+                msg += to_unicode(u" – ") + to_unicode(srv)
+            AddPopup(to_native_str(msg), MessageBox.TYPE_INFO, timeout=5, id="nordvpn_notify")
         elif not _plugin_open:
-            AddPopup("NordVPN getrennt! Reconnect in bis zu 60 Sek...", MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
+            AddPopup(to_native_str(u"NordVPN getrennt! Reconnect in bis zu 60 Sek..."), MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
     _last_vpn_status = current
 
 
@@ -920,15 +962,34 @@ def autostart(reason, **kwargs):
     global _status_timer
     if reason != 0:
         return
-    import subprocess
-    watchdog_pid = "/var/run/nordvpn-watchdog.pid"
-    if os.path.isfile(watchdog_pid):
+
+    # DNS rescue if box crashed while VPN was connected
+    RESOLV_CONF   = "/etc/resolv.conf"
+    RESOLV_BACKUP = "/etc/resolv.conf.nordvpn.bak"
+    if not manager.is_connected() and os.path.isfile(RESOLV_BACKUP):
         try:
-            pid = open(watchdog_pid).read().strip()
-            if pid and os.path.isdir("/proc/%s" % pid):
-                os.kill(int(pid), 15)
+            import shutil
+            shutil.move(RESOLV_BACKUP, RESOLV_CONF)
         except Exception:
             pass
+
+    import subprocess
+    try:
+        for _entry in os.listdir("/proc"):
+            if not _entry.isdigit():
+                continue
+            try:
+                with open("/proc/%s/cmdline" % _entry) as _f:
+                    _cmdline = _f.read()
+            except Exception:
+                continue
+            if "nordvpn-watchdog" in _cmdline:
+                try:
+                    os.kill(int(_entry), 15)
+                except Exception:
+                    pass
+    except Exception:
+        pass
     subprocess.Popen(["python", "/usr/sbin/nordvpn-watchdog"])
     if manager.get_autostart():
         subprocess.Popen(

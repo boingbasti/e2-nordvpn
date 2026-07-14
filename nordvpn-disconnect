@@ -1,11 +1,12 @@
 #!/bin/sh
 # NordVPN disconnect helper
 
-WATCHDOG_PID_FILE="/var/run/nordvpn-watchdog.pid"
-if [ -f "$WATCHDOG_PID_FILE" ]; then
-    kill "$(cat $WATCHDOG_PID_FILE 2>/dev/null)" 2>/dev/null || true
-    rm -f "$WATCHDOG_PID_FILE"
-fi
+for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+    if grep -q "nordvpn-watchdog" "/proc/$pid/cmdline" 2>/dev/null; then
+        kill "$pid" 2>/dev/null
+    fi
+done
+rm -f /var/run/nordvpn-watchdog.pid
 
 rm -f /tmp/nordvpn_watchdog_skip.txt
 
@@ -16,11 +17,22 @@ if [ -f "$RESOLV_BACKUP" ]; then
     echo "DNS restored"
 fi
 
-for f in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
-    iface=$(echo "$f" | cut -d/ -f6)
-    [ "$iface" != "lo" ] && echo 0 > "$f"
-done
-echo "IPv6 restored"
+IPV6_STATE_FILE="/tmp/nordvpn_ipv6_states"
+if [ -f "$IPV6_STATE_FILE" ]; then
+    while IFS='=' read -r path val; do
+        if [ -f "$path" ]; then
+            echo "$val" > "$path"
+        fi
+    done < "$IPV6_STATE_FILE"
+    rm -f "$IPV6_STATE_FILE"
+    echo "IPv6 states restored from backup"
+else
+    for f in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
+        iface=$(echo "$f" | cut -d/ -f6)
+        [ "$iface" != "lo" ] && echo 0 > "$f"
+    done
+    echo "IPv6 restored (fallback)"
+fi
 
 if grep -q "# nordvpn-streaming-fix" /etc/hosts 2>/dev/null; then
     grep -v "# nordvpn-streaming-fix" /etc/hosts > /tmp/hosts.tmp && mv /tmp/hosts.tmp /etc/hosts
