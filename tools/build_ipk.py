@@ -4,9 +4,9 @@
 import os
 import tarfile
 import io
+import xml.etree.ElementTree as ET
 
 PLUGIN_NAME   = "enigma2-plugin-extensions-nordvpn"
-VERSION       = "1.9.2"
 ARCHITECTURE  = "all"
 MAINTAINER    = "saufsoldat"
 DESCRIPTION   = "NordVPN OpenVPN-Client fuer Enigma2"
@@ -18,9 +18,14 @@ SBIN_DEST   = "/usr/sbin"
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+
+VERSION = ET.parse(os.path.join(PROJECT_DIR, "meta.xml")).findtext("version")
+if not VERSION:
+    raise SystemExit("FEHLER: Version nicht in meta.xml gefunden")
+
 OUTPUT_FILE = os.path.join(PROJECT_DIR, f"{PLUGIN_NAME}_{VERSION}_{ARCHITECTURE}.ipk")
 
-PLUGIN_FILES = ["__init__.py", "plugin.py", "manager.py", "plugin.png"]
+PLUGIN_FILES = ["__init__.py", "plugin.py", "manager.py", "plugin.png", "meta.xml"]
 SBIN_FILES   = ["nordvpn-connect", "nordvpn-disconnect",
                 "nordvpn-fetch-countries", "nordvpn-watchdog", "nordvpn-webif"]
 
@@ -97,6 +102,7 @@ def build_control_tar():
         f"Depends: {DEPENDS}\n"
         f"Section: misc\n"
         f"Priority: optional\n"
+        f"License: GPL-2.0\n"
         f"Description: {DESCRIPTION}\n"
     ).encode("utf-8")
 

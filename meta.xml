@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin>
+    <name>NordVPN</name>
+    <description>NordVPN OpenVPN-Client fuer Enigma2</description>
+    <version>1.9.3</version>
+    <author>saufsoldat</author>
+    <category>Network</category>
+    <icon>plugin.png</icon>
+</plugin>

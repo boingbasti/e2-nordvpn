@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
-VERSION = "1.9.2"
-
 import os
+try:
+    import xml.etree.ElementTree as _ET
+    _meta = _ET.parse(os.path.join(os.path.dirname(__file__), "meta.xml"))
+    VERSION = _meta.findtext("version") or "?"
+except Exception:
+    VERSION = "?"
 import time
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen

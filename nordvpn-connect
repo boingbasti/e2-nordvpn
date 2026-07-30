@@ -31,7 +31,7 @@ HOSTS_MARKER = "# nordvpn-streaming-fix"
 CDN_HOSTS    = ["nrodlzdf-a.akamaihd.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix
 
 AUTH_CHECK_DELAY = 4
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 10
 
 
 WATCHDOG_PID  = "/var/run/nordvpn-watchdog.pid"
@@ -217,7 +217,7 @@ def fetch(url, timeout=15):
 
 def get_best_server():
     tech = "openvpn_%s" % PROTO
-    limit = len(SKIP_HOSTS) + 3 if SKIP_HOSTS else 1
+    limit = max(len(SKIP_HOSTS) + 3, 5)
     url = ("%s/servers/recommendations"
            "?filters[country_id]=%d"
            "&filters[servers_technologies][identifier]=%s"
@@ -263,8 +263,9 @@ def attempt_connect(server):
     try:
         ovpn = download_ovpn(server)
     except Exception as e:
-        log("ERROR: Failed to download OpenVPN config (%s)" % str(e))
-        sys.exit(1)
+        log("ERROR: Config-Download fehlgeschlagen fuer %s (%s), versuche naechsten Server..." % (server, str(e)))
+        _record_failed_server(server)
+        return False
 
     # Strip directives we override so there are no duplicates
     clean_lines = [
@@ -418,7 +419,7 @@ def main():
 
         SKIP_HOSTS.append(server)
 
-    log("ERROR: Alle versuchten Server haben die Zugangsdaten abgelehnt")
+    log("ERROR: Kein Server verfuegbar nach %d Versuchen (Server offline oder Zugangsdaten abgelehnt)" % MAX_ATTEMPTS)
     sys.exit(1)
 
 

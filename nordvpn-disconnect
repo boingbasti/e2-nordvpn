@@ -64,6 +64,11 @@ fi
 rm -f "$PID_FILE"
 rm -f /etc/openvpn/nordvpn.conf
 
+if ip link show tun0 >/dev/null 2>&1; then
+    ip link delete tun0 2>/dev/null || true
+    echo "tun0 entfernt"
+fi
+
 if [ "$KILLED" = "1" ]; then
     echo "Disconnected"
 else
