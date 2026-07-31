@@ -795,6 +795,8 @@ class NordVPNMain(Screen):
         self._city_buf += data
 
     def _on_city_done(self, retval):
+        if self._connecting:
+            return
         city = self._city_buf.strip()
         if retval == 0 and city:
             self["city_lbl"].setText(city)
@@ -903,6 +905,8 @@ class NordVPNMain(Screen):
             return
         if self._con_container.running():
             return
+        self._city_timer.stop()
+        self["city_lbl"].setText("")
         current = manager.get_current_server()
         if current and current not in self._skip_servers:
             self._skip_servers.append(current)

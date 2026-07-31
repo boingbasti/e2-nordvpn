@@ -26,13 +26,12 @@ if [ -f "$IPV6_STATE_FILE" ]; then
     done < "$IPV6_STATE_FILE"
     rm -f "$IPV6_STATE_FILE"
     echo "IPv6 states restored from backup"
-else
-    for f in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
-        iface=$(echo "$f" | cut -d/ -f6)
-        [ "$iface" != "lo" ] && echo 0 > "$f"
-    done
-    echo "IPv6 restored (fallback)"
 fi
+for f in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
+    iface=$(echo "$f" | cut -d/ -f6)
+    [ "$iface" != "lo" ] && echo 0 > "$f"
+done
+echo "IPv6 aktiviert"
 
 if grep -q "# nordvpn-streaming-fix" /etc/hosts 2>/dev/null; then
     grep -v "# nordvpn-streaming-fix" /etc/hosts > /tmp/hosts.tmp && mv /tmp/hosts.tmp /etc/hosts

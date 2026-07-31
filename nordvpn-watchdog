@@ -102,6 +102,7 @@ def main():
             country_id, proto, server_type = read_config()
             skip = read_skip_list()
             subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
+            start_time = time.time()
         except Exception:
             _log_error()
             time.sleep(5)
