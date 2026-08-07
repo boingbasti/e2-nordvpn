@@ -87,6 +87,7 @@ def main():
     open(SELF_PID, "w").write(str(os.getpid()))
     was_connected = is_vpn_connected()
     start_time = time.time()
+    reconnect_proc = None
     while True:
         try:
             elapsed = time.time() - start_time
@@ -95,13 +96,16 @@ def main():
             connected = is_vpn_connected()
             if connected:
                 was_connected = True
+                reconnect_proc = None
                 continue
             if not was_connected:
+                continue
+            if reconnect_proc is not None and reconnect_proc.poll() is None:
                 continue
             add_failed_server()
             country_id, proto, server_type = read_config()
             skip = read_skip_list()
-            subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
+            reconnect_proc = subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
             start_time = time.time()
         except Exception:
             _log_error()

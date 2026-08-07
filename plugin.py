@@ -350,7 +350,7 @@ class NordVPNSettings(Screen):
     _IDX_SFIX    = 6
     _IDX_DNS     = 7
 
-    def __init__(self, session):
+    def __init__(self, session, selected_index=0):
         self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
         Screen.__init__(self, session)
         self["title_lbl"] = Label(to_native_str(u"Einstellungen"))
@@ -368,11 +368,18 @@ class NordVPNSettings(Screen):
             },
             -1,
         )
-        self._webif_was_running = False
+        try:
+            self._restore_index = max(0, int(selected_index))
+        except Exception:
+            self._restore_index = 0
+        self._webif_was_running = manager.is_webif_running()
         self._webif_timer = eTimer()
         self._webif_timer.callback.append(self._check_webif)
         self._webif_timer.start(2000, False)
         self._refresh()
+        self._restore_timer = eTimer()
+        self._restore_timer.callback.append(self._restore_selection)
+        self._restore_timer.start(50, True)
 
     def _entries(self):
         creds = to_native_str(u"*** gesetzt ***" if manager.has_auth() else u"(nicht gesetzt)")
@@ -397,6 +404,22 @@ class NordVPNSettings(Screen):
     def _refresh(self):
         self["list"].setList(self._entries())
 
+    def _restore_selection(self):
+        try:
+            self["list"].moveToIndex(self._restore_index)
+        except Exception:
+            pass
+
+    def _reopen(self, reconnect=False):
+        try:
+            selected_index = self["list"].getSelectedIndex()
+        except Exception:
+            selected_index = 0
+        if reconnect:
+            self.close(("reconnect", selected_index))
+        else:
+            self.close(("reopen", selected_index))
+
     def _keyOK(self):
         idx = self["list"].getSelectedIndex()
         if idx == self._IDX_CREDS:
@@ -417,29 +440,30 @@ class NordVPNSettings(Screen):
             self._toggle_dns()
 
     def _refresh_cb(self, result=None):
-        self._refresh()
+        self._reopen()
 
     def _country_chosen(self, result=None):
-        if result:
-            country_id, country_name = result
-            manager.set_country(country_id, country_name)
-        self._refresh()
+        if not result:
+            return
+        country_id, country_name = result
+        manager.set_country(country_id, country_name)
+        self._reopen(True)
 
     def _toggle_proto(self):
         manager.set_protocol("tcp" if manager.get_protocol() == "udp" else "udp")
-        self._refresh()
+        self._reopen(True)
 
     def _toggle_auto(self):
         manager.set_autostart(not manager.get_autostart())
-        self._refresh()
+        self._reopen()
 
     def _toggle_stype(self):
         manager.set_server_type("p2p" if manager.get_server_type() == "standard" else "standard")
-        self._refresh()
+        self._reopen(True)
 
     def _toggle_sfix(self):
         manager.set_streaming_fix(not manager.get_streaming_fix())
-        self._refresh()
+        self._reopen(True)
 
     def _toggle_dns(self):
         dns_list = ["nordvpn", "google", "cloudflare"]
@@ -449,27 +473,32 @@ class NordVPNSettings(Screen):
         except ValueError:
             next_idx = 0
         manager.set_dns_type(dns_list[next_idx])
-        self._refresh()
+        self._reopen(True)
 
     def _check_webif(self):
         running = manager.is_webif_running()
         if running != self._webif_was_running:
             self._webif_was_running = running
-            self._refresh()
+            self._reopen()
 
-    def close(self):
+    def close(self, *retval):
         self._webif_timer.stop()
-        Screen.close(self)
+        try:
+            self._restore_timer.stop()
+        except Exception:
+            pass
+        Screen.close(self, *retval)
 
     def _webif_action(self):
         if manager.is_webif_running():
             manager.stop_webif()
-            self._refresh()
+            self._reopen()
         else:
             manager.start_webif()
+            self._webif_was_running = True
             url = manager.get_webif_url()
             self.session.openWithCallback(
-                lambda *a: self._refresh(),
+                lambda *a: self._reopen(),
                 MessageBox,
                 "WebIF gestartet:\n%s\n\nIm Browser \xc3\xb6ffnen und Zugangsdaten eingeben.\nStoppt automatisch nach 5 Minuten." % url,
                 MessageBox.TYPE_INFO,
@@ -664,6 +693,9 @@ class NordVPNMain(Screen):
         self._prev_connected = None
         self._connecting = False
         self._skip_servers = []
+        self._settings_reconnect_pending = False
+        self._reconnect_timer = eTimer()
+        self._reconnect_timer.callback.append(self._finish_settings_reconnect)
 
         self["title_lbl"]    = Label("NordVPN v%s" % VERSION)
         self["status_lbl"]   = Label("")
@@ -844,6 +876,8 @@ class NordVPNMain(Screen):
         _last_vpn_status = manager.is_connected()
         self._timer.stop()
         self._city_timer.stop()
+        self._settings_reconnect_pending = False
+        self._reconnect_timer.stop()
         Screen.close(self)
 
     def _on_output(self, data):
@@ -867,6 +901,17 @@ class NordVPNMain(Screen):
 
     def _on_disconnect_done(self, retval):
         self._update_status()
+        if self._settings_reconnect_pending:
+            self._reconnect_timer.start(500, True)
+
+    def _finish_settings_reconnect(self):
+        if not self._settings_reconnect_pending:
+            return
+        if manager.is_connected():
+            self._reconnect_timer.start(500, True)
+            return
+        self._settings_reconnect_pending = False
+        self._connect()
 
     def _connect(self):
         if manager.is_connected():
@@ -934,7 +979,34 @@ class NordVPNMain(Screen):
         self._dc_container.execute(manager.get_disconnect_cmd())
 
     def _open_settings(self):
-        self.session.openWithCallback(lambda *a: self._update_status(), NordVPNSettings)
+        self._open_settings_at(0)
+
+    def _open_settings_at(self, selected_index):
+        self.session.openWithCallback(self._settings_closed, NordVPNSettings, selected_index)
+
+    def _settings_closed(self, result=None):
+        if isinstance(result, tuple) and len(result) == 2:
+            if result[0] == "reopen":
+                self._open_settings_at(result[1])
+                return
+            if result[0] == "reconnect":
+                self._open_settings_at(result[1])
+                self._settings_reconnect_pending = True
+                if manager.is_connected():
+                    if not self._dc_container.running():
+                        self._dc_container.execute(manager.get_disconnect_cmd())
+                else:
+                    self._reconnect_timer.start(100, True)
+                return
+        self._update_status()
+        if manager.is_connected():
+            try:
+                if not self._ip_container.running():
+                    self._fetch_ip()
+                if not self._city_container.running():
+                    self._fetch_city()
+            except Exception:
+                pass
 
 
 
