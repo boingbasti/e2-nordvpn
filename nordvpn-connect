@@ -28,7 +28,7 @@ API_BASE     = "https://api.nordvpn.com/v1"
 
 HOSTS_FILE   = "/etc/hosts"
 HOSTS_MARKER = "# nordvpn-streaming-fix"
-CDN_HOSTS    = ["nrodlzdf-a.akamaihd.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix
+CDN_HOSTS    = ["nrodlzdf-a.akamaihd.net", "rbbmediapmdp-a.akamaihd.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix, RBB
 
 AUTH_CHECK_DELAY = 4
 MAX_ATTEMPTS = 10

@@ -969,6 +969,7 @@ class NordVPNMain(Screen):
         self._con_container.execute(manager.get_connect_cmd_skip(self._skip_servers))
 
     def _disconnect(self):
+        global _manual_disconnect
         if self._dc_container.running():
             return
         self._log_buf = ""
@@ -976,6 +977,7 @@ class NordVPNMain(Screen):
         self["status_lbl"].setText("Trenne...")
         self["key_red"].setText("")
         self["key_green"].setText("")
+        _manual_disconnect = True
         self._dc_container.execute(manager.get_disconnect_cmd())
 
     def _open_settings(self):
@@ -1021,10 +1023,11 @@ def main(session, **kwargs):
 _status_timer = None
 _last_vpn_status = None
 _plugin_open = False
+_manual_disconnect = False
 
 
 def _check_vpn_status():
-    global _last_vpn_status
+    global _last_vpn_status, _manual_disconnect
     current = manager.is_connected()
     if _last_vpn_status is not None and current != _last_vpn_status:
         if current and not _plugin_open:
@@ -1033,8 +1036,9 @@ def _check_vpn_status():
             if srv:
                 msg += to_unicode(u" – ") + to_unicode(srv)
             AddPopup(to_native_str(msg), MessageBox.TYPE_INFO, timeout=5, id="nordvpn_notify")
-        elif not _plugin_open:
-            AddPopup(to_native_str(u"NordVPN getrennt! Reconnect in bis zu 60 Sek..."), MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
+        elif not _plugin_open and not _manual_disconnect:
+            AddPopup(to_native_str(u"NordVPN getrennt."), MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
+        _manual_disconnect = False
     _last_vpn_status = current
 
 
