@@ -33,12 +33,15 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 - Automatische Serverwahl über die offizielle NordVPN-API
 - **Automatisches Überspringen kaputter Server** – ist ein von der API empfohlener Server nicht erreichbar oder lehnt die Zugangsdaten ab, probiert das Plugin selbstständig bis zu 10 weitere Kandidaten, statt mit einer irreführenden Fehlermeldung aufzugeben
 - Unterstützung für **UDP** und **TCP**
-- **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt
+- **P2P-Server-Typ** wählbar
+- **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt; DNS-Server wählbar: NordVPN (Standard), Google (8.8.8.8) oder Cloudflare (1.1.1.1)
 - **IPv6-Leak-Schutz** – IPv6 wird für die Dauer der VPN-Verbindung deaktiviert
+- **Mediathek-Fix** – behebt Verbindungsfehler bei ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix und RBB durch Akamai-CDN-Routing bei aktiver NordVPN-Verbindung
 - **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch (in den ersten 2 Minuten nach einem Verbindungsversuch alle 10 Sekunden, danach alle 60 Sekunden); merkt sich dabei kaputte Server und meidet sie bei künftigen automatischen Reconnects
-- **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist); die Getrennt-Meldung enthält einen Hinweis auf den automatischen Reconnect
+- **Auto-Reconnect bei Einstellungsänderungen** – Land, Protokoll, Server-Typ, DNS oder Mediathek-Fix ändern verbindet automatisch neu, ohne den Einstellungs-Screen zu verlassen
+- **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist; bei manuellem Trennen erscheint keine Meldung)
 - **Nächster Server** – bei bestehender Verbindung wechselt die Blaue Taste direkt zum nächstbesten Server der NordVPN-API (aktueller und bereits bekannte kaputte Server werden übersprungen)
-- **Wählbarer DNS-Server** – NordVPN (Standard), Google (8.8.8.8) oder Cloudflare (1.1.1.1)
+- **WebIF** – Zugangsdaten per Browser eingeben, ohne die Fernbedienung zu nutzen
 - **Autostart** beim Hochfahren der Box (optional)
 - **Zuletzt gewählte Länder** werden oben in der Länderliste angezeigt
 
@@ -47,7 +50,6 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 ## Voraussetzungen
 
 - VU+ Receiver mit **VTI-Image**
-- OpenVPN installiert: `opkg install openvpn`
 - Ein NordVPN-Konto mit **Service Credentials**
 
 > **Wichtig:** Es werden nicht die normalen Login-Daten benötigt, sondern die manuellen Service Credentials.  
@@ -112,7 +114,14 @@ Einstellungen → **Protokoll** → OK oder Links/Rechts
 - **UDP** – Standard, schneller
 - **TCP** – stabiler hinter restriktiven Firewalls
 
-### 4. DNS-Server
+### 4. Server-Typ wählen
+
+Einstellungen → **Server-Typ** → OK oder Links/Rechts
+
+- **Standard** – normale NordVPN-Server
+- **P2P** – Server mit P2P-Unterstützung
+
+### 5. DNS-Server
 
 Einstellungen → **DNS-Server** → OK oder Links/Rechts
 
@@ -120,9 +129,16 @@ Einstellungen → **DNS-Server** → OK oder Links/Rechts
 - **Google** – 8.8.8.8 / 8.8.4.4
 - **Cloudflare** – 1.1.1.1 / 1.0.0.1
 
-### 5. Autostart
+### 6. Mediathek-Fix
+
+Einstellungen → **Mediathek-Fix** → OK oder Links/Rechts
+
+Behebt Verbindungsfehler bei ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix und RBB bei aktiver NordVPN-Verbindung. Ursache ist Akamai-CDN-Routing: Der Fix löst den betroffenen Hostnamen vor dem VPN-Aufbau mit dem Heim-DNS auf und trägt die IP temporär in `/etc/hosts` ein. Beim Trennen wird der Eintrag automatisch wieder entfernt.
+
+### 7. Autostart
 
 Einstellungen → **Autostart** → OK oder Links/Rechts
+
 
 Wenn aktiviert, verbindet das Plugin automatisch beim Starten der Box.
 
