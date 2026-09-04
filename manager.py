@@ -96,6 +96,12 @@ class NordVPNManager(object):
     def set_dns_type(self, dtype):
         self._set("dns_type", dtype)
 
+    def get_custom_ovpn(self):
+        return self._get("custom_ovpn", "0") == "1"
+
+    def set_custom_ovpn(self, enabled):
+        self._set("custom_ovpn", "1" if enabled else "0")
+
     def save_credentials(self, username, password):
         auth_dir = os.path.dirname(AUTH_FILE)
         if not os.path.isdir(auth_dir):

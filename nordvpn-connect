@@ -26,9 +26,10 @@ WATCHDOG_SKIP_FILE = "/tmp/nordvpn_watchdog_skip.txt"
 CONFIG_FILE  = "/etc/enigma2/nordvpn.conf"
 API_BASE     = "https://api.nordvpn.com/v1"
 
-HOSTS_FILE   = "/etc/hosts"
-HOSTS_MARKER = "# nordvpn-streaming-fix"
-CDN_HOSTS    = ["nrodlzdf-a.akamaihd.net", "rbbmediapmdp-a.akamaihd.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix, RBB
+HOSTS_FILE    = "/etc/hosts"
+HOSTS_MARKER  = "# nordvpn-streaming-fix"
+CDN_HOSTS     = ["nrodlzdf-a.akamaihd.net", "rbbmediapmdp-a.akamaihd.net", "ardevent2.akamaized.net"]  # ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix, RBB, ARD-Event2
+CUSTOM_OVPN_FILE = "/etc/openvpn/nordvpn_custom.ovpn"
 
 AUTH_CHECK_DELAY = 4
 MAX_ATTEMPTS = 10
@@ -55,6 +56,19 @@ def _get_streaming_fix():
         cfg = ConfigParser.SafeConfigParser()
         cfg.read(CONFIG_FILE)
         return cfg.get("nordvpn", "streaming_fix") == "1"
+    except Exception:
+        return False
+
+
+def _is_custom_ovpn_enabled():
+    try:
+        try:
+            import ConfigParser
+        except ImportError:
+            import configparser as ConfigParser
+        cfg = ConfigParser.SafeConfigParser()
+        cfg.read(CONFIG_FILE)
+        return cfg.get("nordvpn", "custom_ovpn") == "1"
     except Exception:
         return False
 
@@ -257,17 +271,27 @@ def _record_failed_server(hostname):
         f.write(",".join(skip))
 
 
-def attempt_connect(server):
-    log("Connecting to: %s" % server)
-    open(SERVER_FILE, "w").write(server)
+def attempt_connect(server=None, custom_path=None):
+    if custom_path:
+        log("Connecting with custom config: %s" % custom_path)
+        try:
+            with open(custom_path, "rb") as f:
+                ovpn = f.read()
+        except Exception as e:
+            log("ERROR: Eigene Config nicht lesbar (%s)" % str(e))
+            return False
+        open(SERVER_FILE, "w").write("Eigene Config")
+    else:
+        log("Connecting to: %s" % server)
+        open(SERVER_FILE, "w").write(server)
 
-    log("Downloading config...")
-    try:
-        ovpn = download_ovpn(server)
-    except Exception as e:
-        log("ERROR: Config-Download fehlgeschlagen fuer %s (%s), versuche naechsten Server..." % (server, str(e)))
-        _record_failed_server(server)
-        return False
+        log("Downloading config...")
+        try:
+            ovpn = download_ovpn(server)
+        except Exception as e:
+            log("ERROR: Config-Download fehlgeschlagen fuer %s (%s), versuche naechsten Server..." % (server, str(e)))
+            _record_failed_server(server)
+            return False
 
     # Strip directives we override so there are no duplicates
     clean_lines = [
@@ -403,6 +427,13 @@ def main():
             os.remove(WATCHDOG_SKIP_FILE)
         except Exception:
             pass
+
+    if _is_custom_ovpn_enabled():
+        if not os.path.isfile(CUSTOM_OVPN_FILE):
+            log("ERROR: Eigene Config aktiviert, aber Datei nicht gefunden: %s" % CUSTOM_OVPN_FILE)
+            sys.exit(1)
+        attempt_connect(custom_path=CUSTOM_OVPN_FILE)
+        return
 
     for attempt in range(MAX_ATTEMPTS):
         log("Fetching best server for country ID %d..." % COUNTRY_ID)

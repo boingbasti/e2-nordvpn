@@ -2,7 +2,7 @@
 <plugin>
     <name>NordVPN</name>
     <description>NordVPN OpenVPN-Client fuer Enigma2</description>
-    <version>1.9.6</version>
+    <version>1.9.7</version>
     <author>saufsoldat</author>
     <category>Network</category>
     <icon>plugin.png</icon>

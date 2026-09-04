@@ -31,17 +31,15 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 - Verbindung zum besten verfügbaren NordVPN-Server im gewählten Land
 - Automatische Serverwahl über die offizielle NordVPN-API
-- **Automatisches Überspringen kaputter Server** – ist ein von der API empfohlener Server nicht erreichbar oder lehnt die Zugangsdaten ab, probiert das Plugin selbstständig bis zu 10 weitere Kandidaten, statt mit einer irreführenden Fehlermeldung aufzugeben
+- **Automatisches Überspringen kaputter Server** – lehnt ein von der API empfohlener Server die Zugangsdaten ab, probiert das Plugin selbstständig den nächsten Kandidaten, statt mit einer irreführenden Fehlermeldung aufzugeben
 - Unterstützung für **UDP** und **TCP**
-- **P2P-Server-Typ** wählbar
-- **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt; DNS-Server wählbar: NordVPN (Standard), Google (8.8.8.8) oder Cloudflare (1.1.1.1)
+- **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt
 - **IPv6-Leak-Schutz** – IPv6 wird für die Dauer der VPN-Verbindung deaktiviert
-- **Mediathek-Fix** – behebt Verbindungsfehler bei ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix und RBB durch Akamai-CDN-Routing bei aktiver NordVPN-Verbindung
 - **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch (in den ersten 2 Minuten nach einem Verbindungsversuch alle 10 Sekunden, danach alle 60 Sekunden); merkt sich dabei kaputte Server und meidet sie bei künftigen automatischen Reconnects
-- **Auto-Reconnect bei Einstellungsänderungen** – Land, Protokoll, Server-Typ, DNS oder Mediathek-Fix ändern verbindet automatisch neu, ohne den Einstellungs-Screen zu verlassen
-- **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist; bei manuellem Trennen erscheint keine Meldung)
+- **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist); die Getrennt-Meldung enthält einen Hinweis auf den automatischen Reconnect
 - **Nächster Server** – bei bestehender Verbindung wechselt die Blaue Taste direkt zum nächstbesten Server der NordVPN-API (aktueller und bereits bekannte kaputte Server werden übersprungen)
-- **WebIF** – Zugangsdaten per Browser eingeben, ohne die Fernbedienung zu nutzen
+- **Mediathek-Fix** – behebt Verbindungsfehler bei ARD (Event 2), ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix und RBB durch Vorabauflösung der betroffenen Akamai-CDN-Hostnamen
+- **Eigene OpenVPN-Config** – wer eine Dedicated-IP oder einen festen Server nutzen möchte, kann eine eigene `.ovpn`-Datei unter `/etc/openvpn/nordvpn_custom.ovpn` hinterlegen und in den Einstellungen aktivieren
 - **Autostart** beim Hochfahren der Box (optional)
 - **Zuletzt gewählte Länder** werden oben in der Länderliste angezeigt
 
@@ -50,6 +48,7 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 ## Voraussetzungen
 
 - VU+ Receiver mit **VTI-Image**
+- OpenVPN installiert: `opkg install openvpn`
 - Ein NordVPN-Konto mit **Service Credentials**
 
 > **Wichtig:** Es werden nicht die normalen Login-Daten benötigt, sondern die manuellen Service Credentials.  
@@ -59,9 +58,11 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 ## Installation
 
-Die aktuelle `.ipk`-Datei von der [Releases-Seite](../../releases/latest) herunterladen und per SSH auf die Box übertragen:
+Die aktuelle Version als ZIP-Archiv von der [Releases-Seite](../../releases/latest) herunterladen, entpacken und per SSH auf die Box übertragen:
 
 ```sh
+unzip enigma2-plugin-extensions-nordvpn_*.zip
+
 cat enigma2-plugin-extensions-nordvpn_*_all.ipk | ssh root@<BOX-IP> "cat > /tmp/nordvpn.ipk"
 ssh root@<BOX-IP> "opkg install /tmp/nordvpn.ipk"
 ```
@@ -114,31 +115,9 @@ Einstellungen → **Protokoll** → OK oder Links/Rechts
 - **UDP** – Standard, schneller
 - **TCP** – stabiler hinter restriktiven Firewalls
 
-### 4. Server-Typ wählen
-
-Einstellungen → **Server-Typ** → OK oder Links/Rechts
-
-- **Standard** – normale NordVPN-Server
-- **P2P** – Server mit P2P-Unterstützung
-
-### 5. DNS-Server
-
-Einstellungen → **DNS-Server** → OK oder Links/Rechts
-
-- **NordVPN** – Standard, NordVPN-eigene DNS-Server
-- **Google** – 8.8.8.8 / 8.8.4.4
-- **Cloudflare** – 1.1.1.1 / 1.0.0.1
-
-### 6. Mediathek-Fix
-
-Einstellungen → **Mediathek-Fix** → OK oder Links/Rechts
-
-Behebt Verbindungsfehler bei ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix und RBB bei aktiver NordVPN-Verbindung. Ursache ist Akamai-CDN-Routing: Der Fix löst den betroffenen Hostnamen vor dem VPN-Aufbau mit dem Heim-DNS auf und trägt die IP temporär in `/etc/hosts` ein. Beim Trennen wird der Eintrag automatisch wieder entfernt.
-
-### 7. Autostart
+### 4. Autostart
 
 Einstellungen → **Autostart** → OK oder Links/Rechts
-
 
 Wenn aktiviert, verbindet das Plugin automatisch beim Starten der Box.
 

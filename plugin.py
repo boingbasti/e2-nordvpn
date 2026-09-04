@@ -349,6 +349,7 @@ class NordVPNSettings(Screen):
     _IDX_STYPE   = 5
     _IDX_SFIX    = 6
     _IDX_DNS     = 7
+    _IDX_CUSTOM  = 8
 
     def __init__(self, session, selected_index=0):
         self.skin = self._SKIN_FHD if IS_FHD else self._SKIN_HD
@@ -356,7 +357,7 @@ class NordVPNSettings(Screen):
         self["title_lbl"] = Label(to_native_str(u"Einstellungen"))
         self["list"]     = MenuList([])
         self["key_red"]  = Label(to_native_str(u"Zurück"))
-        self["key_hint"] = Label(to_native_str(u"OK = Ändern"))
+        self["key_hint"] = Label(to_native_str(u""))
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions"],
             {
@@ -365,6 +366,8 @@ class NordVPNSettings(Screen):
                 "red":    self.close,
                 "left":   self._keyLeft,
                 "right":  self._keyRight,
+                "up":     self._keyUp,
+                "down":   self._keyDown,
             },
             -1,
         )
@@ -390,6 +393,7 @@ class NordVPNSettings(Screen):
         sfix  = to_native_str(u"Ein" if manager.get_streaming_fix() else u"Aus")
         dns_names = {"nordvpn": u"NordVPN (Standard)", "google": u"Google (8.8.8.8)", "cloudflare": u"Cloudflare (1.1.1.1)"}
         dns_val = to_native_str(dns_names.get(manager.get_dns_type(), u"NordVPN (Standard)"))
+        custom = to_native_str(u"Ein" if manager.get_custom_ovpn() else u"Aus")
         return [
             to_native_str(u"Zugangsdaten:   ") + creds,
             to_native_str(u"Land:           ") + to_native_str(manager.get_country_name()),
@@ -399,16 +403,46 @@ class NordVPNSettings(Screen):
             to_native_str(u"Server-Typ:     ") + stype,
             to_native_str(u"Mediathek-Fix:  ") + sfix,
             to_native_str(u"DNS-Server:     ") + dns_val,
+            to_native_str(u"Eigene Config:  ") + custom,
         ]
 
     def _refresh(self):
         self["list"].setList(self._entries())
+
+    _HINTS = [
+        u"Service Credentials f\xfcr NordVPN hinterlegen",
+        u"Zielland f\xfcr die VPN-Verbindung w\xe4hlen",
+        u"UDP: schneller  |  TCP: stabiler hinter Firewalls",
+        u"Automatisch verbinden beim Starten der Box",
+        u"Credentials bequem \xfcber den Browser eingeben",
+        u"Standard: normaler Server  |  P2P: Torrents",
+        u"Akamai-CDN-Hosts voraufl\xf6sen f\xfcr ARD/ZDF-Mediathek",
+        u"DNS-Server w\xe4hrend der VPN-Verbindung",
+        u"Eigene .ovpn-Datei: /etc/openvpn/nordvpn_custom.ovpn",
+    ]
+
+    def _update_hint(self):
+        try:
+            idx = self["list"].getSelectedIndex()
+            if 0 <= idx < len(self._HINTS):
+                self["key_hint"].setText(to_native_str(self._HINTS[idx]))
+        except Exception:
+            pass
+
+    def _keyUp(self):
+        self["list"].up()
+        self._update_hint()
+
+    def _keyDown(self):
+        self["list"].down()
+        self._update_hint()
 
     def _restore_selection(self):
         try:
             self["list"].moveToIndex(self._restore_index)
         except Exception:
             pass
+        self._update_hint()
 
     def _reopen(self, reconnect=False):
         try:
@@ -438,6 +472,8 @@ class NordVPNSettings(Screen):
             self._toggle_sfix()
         elif idx == self._IDX_DNS:
             self._toggle_dns()
+        elif idx == self._IDX_CUSTOM:
+            self._toggle_custom()
 
     def _refresh_cb(self, result=None):
         self._reopen()
@@ -473,6 +509,10 @@ class NordVPNSettings(Screen):
         except ValueError:
             next_idx = 0
         manager.set_dns_type(dns_list[next_idx])
+        self._reopen(True)
+
+    def _toggle_custom(self):
+        manager.set_custom_ovpn(not manager.get_custom_ovpn())
         self._reopen(True)
 
     def _check_webif(self):
@@ -517,6 +557,8 @@ class NordVPNSettings(Screen):
             self._toggle_sfix()
         elif idx == self._IDX_DNS:
             self._toggle_dns()
+        elif idx == self._IDX_CUSTOM:
+            self._toggle_custom()
 
     def _keyRight(self):
         self._keyLeft()
@@ -775,7 +817,7 @@ class NordVPNMain(Screen):
             self["server_lbl"].setText(to_native_str(srv) if srv else "")
             self["key_red"].setText(to_native_str(u"Trennen"))
             self["key_green"].setText("")
-            self["key_blue"].setText(to_native_str(u"Nächster Server"))
+            self["key_blue"].setText("" if manager.get_custom_ovpn() else to_native_str(u"Nächster Server"))
             rx, tx = self._read_tun_bytes()
             dur = _fmt_duration(time.time() - self._connect_time) if self._connect_time else ""
             if rx is not None:
@@ -947,6 +989,8 @@ class NordVPNMain(Screen):
 
     def _next_server(self):
         if not manager.is_connected():
+            return
+        if manager.get_custom_ovpn():
             return
         if self._con_container.running():
             return
