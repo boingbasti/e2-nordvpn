@@ -83,7 +83,27 @@ def _log_error():
         pass
 
 
+def _daemonize():
+    # Doppel-Fork, damit dieser Dauerprozess sofort von init (PID 1) statt von
+    # Enigma2 geerbt wird. Enigma2 selbst wartet in bestimmten Situationen
+    # blockierend auf irgendein eigenes Kind (waitpid(-1, ...) statt auf die
+    # konkrete PID) - ein Dauerprozess, der als direktes Kind von Enigma2
+    # haengen bleibt, kann Enigma2 dadurch komplett einfrieren (beobachtet auf
+    # VTi16). Ohne Reparenting auf init ist das reine Glueckssache je nach
+    # Timing/Image-Version.
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        os._exit(0)
+    devnull_fd = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull_fd, 0)
+    os.dup2(devnull_fd, 1)
+    os.dup2(devnull_fd, 2)
+
+
 def main():
+    _daemonize()
     open(SELF_PID, "w").write(str(os.getpid()))
     was_connected = is_vpn_connected()
     start_time = time.time()

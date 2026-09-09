@@ -784,6 +784,8 @@ class NordVPNMain(Screen):
             pass
 
     def _update_status(self):
+        if self._dc_container.running():
+            return
         connected = manager.is_connected()
         if connected != self._prev_connected:
             if connected:
@@ -1123,7 +1125,10 @@ def autostart(reason, **kwargs):
         subprocess.Popen(
             ["python", "/usr/sbin/nordvpn-connect",
              str(manager.get_country_id()),
-             manager.get_protocol()],
+             manager.get_protocol(),
+             manager.get_server_type(),
+             "",
+             "--daemon"],
         )
     _status_timer = eTimer()
     _status_timer.callback.append(_check_vpn_status)

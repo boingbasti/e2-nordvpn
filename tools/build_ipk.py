@@ -38,6 +38,12 @@ chmod +x /usr/sbin/nordvpn-connect \\
          /usr/sbin/nordvpn-watchdog \\
          /usr/sbin/nordvpn-webif
 rm -f /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/*.pyo
+modprobe tun 2>/dev/null || true
+if [ -d /etc/modules-load.d ]; then
+    echo "tun" > /etc/modules-load.d/tun.conf
+elif [ -f /etc/modules ] && ! grep -q "^tun" /etc/modules; then
+    echo "tun" >> /etc/modules
+fi
 WDOG_PID=/var/run/nordvpn-watchdog.pid
 if [ -f "$WDOG_PID" ] && [ -d "/proc/$(cat $WDOG_PID 2>/dev/null)" ]; then
     exit 0

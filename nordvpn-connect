@@ -13,14 +13,17 @@ import json
 import subprocess
 import time
 
-COUNTRY_ID   = int(sys.argv[1]) if len(sys.argv) > 1 else 81
-PROTO        = sys.argv[2] if len(sys.argv) > 2 else "udp"
-SERVER_TYPE  = sys.argv[3] if len(sys.argv) > 3 else "standard"
-SKIP_HOSTS   = [h for h in sys.argv[4].split(",") if h] if len(sys.argv) > 4 else []
+DAEMON_MODE  = "--daemon" in sys.argv
+_pos_args    = [a for a in sys.argv[1:] if not a.startswith("--")]
+COUNTRY_ID   = int(_pos_args[0]) if len(_pos_args) > 0 and _pos_args[0].isdigit() else 81
+PROTO        = _pos_args[1] if len(_pos_args) > 1 else "udp"
+SERVER_TYPE  = _pos_args[2] if len(_pos_args) > 2 else "standard"
+SKIP_HOSTS   = [h for h in _pos_args[3].split(",") if h] if len(_pos_args) > 3 else []
 AUTH_FILE    = "/etc/openvpn/nordvpn_auth.txt"
 OVPN_CONFIG  = "/etc/openvpn/nordvpn.conf"
 PID_FILE     = "/var/run/openvpn.nordvpn.pid"
 LOG_FILE     = "/var/log/nordvpn.log"
+CONNECT_LOG_FILE = "/var/log/nordvpn-connect.log"
 SERVER_FILE  = "/tmp/nordvpn_server.txt"
 WATCHDOG_SKIP_FILE = "/tmp/nordvpn_watchdog_skip.txt"
 CONFIG_FILE  = "/etc/enigma2/nordvpn.conf"
@@ -45,6 +48,11 @@ NORDVPN_DNS   = ["103.86.96.100", "103.86.99.100"]
 def log(msg):
     print(msg)
     sys.stdout.flush()
+    try:
+        with open(CONNECT_LOG_FILE, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except Exception:
+        pass
 
 
 def _get_streaming_fix():
@@ -161,6 +169,21 @@ def _disable_ipv6():
         log("IPv6 disabled and states backed up")
     except Exception as e:
         log("WARNING: Could not disable IPv6: %s" % str(e))
+
+
+def _ensure_tun():
+    if not os.path.exists("/dev/net/tun"):
+        try:
+            subprocess.call(["modprobe", "tun"])
+        except Exception:
+            pass
+        if not os.path.exists("/dev/net/tun"):
+            try:
+                if not os.path.isdir("/dev/net"):
+                    os.makedirs("/dev/net")
+                subprocess.call(["mknod", "/dev/net/tun", "c", "10", "200"])
+            except Exception:
+                pass
 
 
 def _kill_all_watchdogs():
@@ -320,6 +343,8 @@ def attempt_connect(server=None, custom_path=None):
     if _get_streaming_fix():
         _pre_resolve_cdn()
 
+    _ensure_tun()
+
     log_pos = os.path.getsize(LOG_FILE) if os.path.isfile(LOG_FILE) else 0
 
     log("Starting OpenVPN...")
@@ -339,6 +364,14 @@ def attempt_connect(server=None, custom_path=None):
     for _ in range(40):  # Poll for up to 20 seconds (40 * 0.5s)
         time.sleep(0.5)
 
+        # Read log
+        try:
+            with open(LOG_FILE) as f:
+                f.seek(log_pos)
+                new_log = f.read()
+        except Exception:
+            new_log = ""
+
         # Check if process is still running
         pid_active = False
         try:
@@ -349,24 +382,13 @@ def attempt_connect(server=None, custom_path=None):
         except Exception:
             pass
 
-        if not pid_active:
-            log("ERROR: OpenVPN process terminated prematurely")
-            break
-
-        # Read log
-        try:
-            with open(LOG_FILE) as f:
-                f.seek(log_pos)
-                new_log = f.read()
-        except Exception:
-            new_log = ""
-
         if "AUTH_FAILED" in new_log:
             log("Server %s lehnt Zugangsdaten ab, versuche naechsten Server..." % server)
-            try:
-                os.kill(int(pid), 15)
-            except Exception:
-                pass
+            if pid_active and pid:
+                try:
+                    os.kill(int(pid), 15)
+                except Exception:
+                    pass
             try:
                 os.remove(PID_FILE)
             except Exception:
@@ -377,6 +399,13 @@ def attempt_connect(server=None, custom_path=None):
         if "Initialization Sequence Completed" in new_log:
             log("SUCCESS: OpenVPN started, connecting to %s" % server)
             success = True
+            break
+
+        if not pid_active:
+            if "Cannot open TUN/TAP dev" in new_log:
+                log("ERROR: /dev/net/tun konnte nicht geoeffnet werden")
+            else:
+                log("ERROR: OpenVPN process terminated prematurely")
             break
 
     if not success:
@@ -414,7 +443,36 @@ def attempt_connect(server=None, custom_path=None):
     return True
 
 
+def _daemonize():
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        os._exit(0)
+    devnull_fd = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull_fd, 0)
+    os.dup2(devnull_fd, 1)
+    os.dup2(devnull_fd, 2)
+
+
+def _wait_for_valid_time(timeout=60):
+    if time.time() < 1700000000:
+        log("Systemzeit noch nicht synchronisiert (Jahr 1970), warte auf NTP/Transponderzeit...")
+        start_wait = time.time()
+        while time.time() < 1700000000:
+            time.sleep(1)
+            if time.time() - start_wait > timeout:
+                log("WARNING: Timeout beim Warten auf gueltige Systemzeit!")
+                break
+        if time.time() >= 1700000000:
+            log("Systemzeit synchronisiert: %s" % time.strftime("%Y-%m-%d %H:%M:%S"))
+
+
 def main():
+    if DAEMON_MODE:
+        _daemonize()
+    _wait_for_valid_time()
+    _ensure_tun()
     if not os.path.isfile(AUTH_FILE) or os.path.getsize(AUTH_FILE) < 5:
         log("ERROR: No credentials found at %s" % AUTH_FILE)
         log("Please configure your NordVPN Service Credentials in the plugin settings.")
