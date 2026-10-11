@@ -25,7 +25,7 @@ except Exception:
     IS_FHD = True
 
 from Tools.Notifications import AddPopup
-from Plugins.Extensions.NordVPN.manager import manager
+from Plugins.Extensions.NordVPN.manager import manager, PYTHON_BIN
 
 import sys
 PY3 = sys.version_info[0] >= 3
@@ -124,7 +124,7 @@ class NordVPNCountryList(Screen):
         self._json_file = "/tmp/nordvpn_countries.json"
         self._container = eConsoleAppContainer()
         self._container.appClosed.append(self._on_done)
-        self._container.execute("python /usr/sbin/nordvpn-fetch-countries")
+        self._container.execute("%s /usr/sbin/nordvpn-fetch-countries" % PYTHON_BIN)
 
     def _on_done(self, retval):
         import json
@@ -154,7 +154,7 @@ class NordVPNCountryList(Screen):
         except Exception as e:
             self.session.open(
                 MessageBox,
-                to_native_str(u"Länderliste konnte nicht geladen werden:\n%s") % to_unicode(str(e)),
+                to_native_str(u"Länderliste konnte nicht geladen werden:\n%s" % to_unicode(str(e))),
                 MessageBox.TYPE_ERROR,
                 timeout=5,
             )
@@ -278,7 +278,7 @@ class NordVPNCredentials(Screen):
             manager.save_credentials(self._username, password.strip())
             self.session.openWithCallback(
                 lambda *a: self.close(True),
-                MessageBox, "Zugangsdaten gespeichert.",
+                MessageBox, to_native_str(u"Zugangsdaten gespeichert."),
                 MessageBox.TYPE_INFO, timeout=3,
             )
         else:
@@ -380,9 +380,8 @@ class NordVPNSettings(Screen):
         self._webif_timer.callback.append(self._check_webif)
         self._webif_timer.start(2000, False)
         self._refresh()
-        self._restore_timer = eTimer()
-        self._restore_timer.callback.append(self._restore_selection)
-        self._restore_timer.start(50, True)
+        # Auswahl vor dem ersten Zeichnen setzen, sonst springt der Balken sichtbar
+        self.onLayoutFinish.append(self._restore_selection)
 
     def _entries(self):
         creds = to_native_str(u"*** gesetzt ***" if manager.has_auth() else u"(nicht gesetzt)")
@@ -523,10 +522,6 @@ class NordVPNSettings(Screen):
 
     def close(self, *retval):
         self._webif_timer.stop()
-        try:
-            self._restore_timer.stop()
-        except Exception:
-            pass
         Screen.close(self, *retval)
 
     def _webif_action(self):
@@ -540,7 +535,7 @@ class NordVPNSettings(Screen):
             self.session.openWithCallback(
                 lambda *a: self._reopen(),
                 MessageBox,
-                "WebIF gestartet:\n%s\n\nIm Browser \xc3\xb6ffnen und Zugangsdaten eingeben.\nStoppt automatisch nach 5 Minuten." % url,
+                to_native_str(u"WebIF gestartet:\n%s\n\nIm Browser öffnen und Zugangsdaten eingeben.\nStoppt automatisch nach 5 Minuten." % url),
                 MessageBox.TYPE_INFO,
                 timeout=15,
             )
@@ -611,23 +606,23 @@ class NordVPNMain(Screen):
                     font="Regular;60" halign="center" valign="center"
                     foregroundColor="#e0e0e0" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="server_lbl"  position="340,342" size="1200,36"
+            <widget name="server_lbl"  position="340,342" size="1200,40"
                     font="Regular;32" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="ip_lbl"      position="340,382" size="1200,32"
+            <widget name="ip_lbl"      position="340,382" size="1200,36"
                     font="Regular;28" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="country_lbl" position="340,418" size="1200,32"
+            <widget name="country_lbl" position="340,418" size="1200,36"
                     font="Regular;28" halign="center"
                     foregroundColor="#4ecdc4" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="city_lbl"    position="340,454" size="1200,32"
+            <widget name="city_lbl"    position="340,454" size="1200,36"
                     font="Regular;28" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="transfer_lbl" position="340,490" size="1200,32"
+            <widget name="transfer_lbl" position="340,490" size="1200,36"
                     font="Regular;28" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
@@ -668,23 +663,23 @@ class NordVPNMain(Screen):
                     font="Regular;42" halign="center" valign="center"
                     foregroundColor="#e0e0e0" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="server_lbl"  position="228,228" size="806,24"
+            <widget name="server_lbl"  position="228,228" size="806,26"
                     font="Regular;22" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="ip_lbl"      position="228,254" size="806,22"
+            <widget name="ip_lbl"      position="228,254" size="806,24"
                     font="Regular;20" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="country_lbl" position="228,278" size="806,22"
+            <widget name="country_lbl" position="228,278" size="806,24"
                     font="Regular;20" halign="center"
                     foregroundColor="#4ecdc4" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="city_lbl"    position="228,302" size="806,22"
+            <widget name="city_lbl"    position="228,302" size="806,24"
                     font="Regular;20" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
-            <widget name="transfer_lbl" position="228,326" size="806,22"
+            <widget name="transfer_lbl" position="228,326" size="806,24"
                     font="Regular;20" halign="center"
                     foregroundColor="#888888" backgroundColor="#33000000"
                     transparent="1"/>
@@ -736,8 +731,13 @@ class NordVPNMain(Screen):
         self._connecting = False
         self._skip_servers = []
         self._settings_reconnect_pending = False
+        self._connect_cancelled = False
         self._reconnect_timer = eTimer()
         self._reconnect_timer.callback.append(self._finish_settings_reconnect)
+        # Reconnect erst nach kurzer Ruhepause, damit beim Durchschalten
+        # der Einstellungen nur der zuletzt gewaehlte Wert verbindet
+        self._settings_debounce_timer = eTimer()
+        self._settings_debounce_timer.callback.append(self._start_settings_reconnect)
 
         self["title_lbl"]    = Label("NordVPN v%s" % VERSION)
         self["status_lbl"]   = Label("")
@@ -786,6 +786,11 @@ class NordVPNMain(Screen):
     def _update_status(self):
         if self._dc_container.running():
             return
+        if self._con_container.running():
+            # Waehrend des Verbindungsaufbaus laeuft OpenVPN pro Serverversuch
+            # kurz, das darf nicht als "Verbunden" angezeigt werden
+            self._show_connecting()
+            return
         connected = manager.is_connected()
         if connected != self._prev_connected:
             if connected:
@@ -830,6 +835,10 @@ class NordVPNMain(Screen):
                 )
             elif dur:
                 self["transfer_lbl"].setText(to_native_str(u"Verbunden seit: %s" % dur))
+        elif self._settings_reconnect_pending and not self._settings_debounce_timer.isActive():
+            # Automatischer Reconnect nach Einstellungsaenderung laeuft
+            self["server_lbl"].setText("")
+            self._show_reconnecting()
         else:
             self["status_lbl"].setText(to_native_str(u"Getrennt"))
             self._set_status_color(False)
@@ -837,10 +846,12 @@ class NordVPNMain(Screen):
             self["key_red"].setText("")
             self["key_green"].setText(to_native_str(u"Verbinden"))
             self["key_blue"].setText("")
+        dns_names = {"nordvpn": u"NordVPN", "google": u"Google", "cloudflare": u"Cloudflare"}
         self["country_lbl"].setText(
-            to_native_str(u"Land: %s  |  Protokoll: %s" % (
+            to_native_str(u"Land: %s  |  Protokoll: %s  |  DNS: %s" % (
                 to_unicode(manager.get_country_name()),
                 to_unicode(manager.get_protocol().upper()),
+                dns_names.get(manager.get_dns_type(), u"NordVPN"),
             ))
         )
 
@@ -856,7 +867,7 @@ class NordVPNMain(Screen):
         try:
             data = open("/tmp/nordvpn_extip.txt").read().strip()
             ip = data.split(",")[1]
-            self["ip_lbl"].setText(ip)
+            self["ip_lbl"].setText(to_native_str(ip))
         except Exception:
             pass
 
@@ -868,14 +879,19 @@ class NordVPNMain(Screen):
             )
 
     def _on_city_data(self, data):
+        if PY3 and isinstance(data, bytes):
+            data = data.decode("utf-8", "ignore")
         self._city_buf += data
 
     def _on_city_done(self, retval):
         if self._connecting:
             return
-        city = self._city_buf.strip()
-        if retval == 0 and city:
-            self["city_lbl"].setText(city)
+        try:
+            city = self._city_buf.strip()
+            if retval == 0 and city:
+                self["city_lbl"].setText(to_native_str(city))
+        except Exception:
+            pass
 
     def _read_tun_bytes(self):
         try:
@@ -920,22 +936,37 @@ class NordVPNMain(Screen):
         _last_vpn_status = manager.is_connected()
         self._timer.stop()
         self._city_timer.stop()
+        if self._settings_reconnect_pending and not self._dc_container.running() \
+                and not self._con_container.running():
+            # Plugin wurde vor Ablauf der Wartezeit geschlossen: geaenderte
+            # Einstellungen trotzdem uebernehmen
+            _start_background_connect()
         self._settings_reconnect_pending = False
         self._reconnect_timer.stop()
+        self._settings_debounce_timer.stop()
         Screen.close(self)
 
     def _on_output(self, data):
+        if PY3 and isinstance(data, bytes):
+            data = data.decode("utf-8", "ignore")
         lines = (self._log_buf + data).strip().splitlines()
         self._log_buf = "\n".join(lines[-9:]) + "\n"
-        self["log_lbl"].setText(self._log_buf.strip())
+        try:
+            self["log_lbl"].setText(to_native_str(self._log_buf.strip()))
+        except Exception:
+            pass
 
     def _on_connect_done(self, retval):
         self._connecting = False
+        if self._connect_cancelled:
+            # Vom User abgebrochen, das laufende Trennen aktualisiert die Anzeige
+            self._connect_cancelled = False
+            return
         if retval != 0:
             self._update_status()
             self.session.open(
                 MessageBox,
-                "Fehler beim Verbinden:\n" + self._log_buf[-300:],
+                to_native_str(u"Fehler beim Verbinden:\n") + to_native_str(self._log_buf[-300:]),
                 MessageBox.TYPE_ERROR,
                 timeout=8,
             )
@@ -947,6 +978,36 @@ class NordVPNMain(Screen):
         self._update_status()
         if self._settings_reconnect_pending:
             self._reconnect_timer.start(500, True)
+
+    def _show_connecting(self):
+        self["status_lbl"].setText(to_native_str(u"Verbinde..."))
+        try:
+            self["status_lbl"].instance.setForegroundColor(gRGB(0xff, 0xff, 0xff))
+        except Exception:
+            pass
+        self["key_red"].setText(to_native_str(u"Abbrechen"))
+        self["key_green"].setText("")
+        self["key_blue"].setText("")
+
+    def _show_reconnecting(self):
+        self["status_lbl"].setText(to_native_str(u"Verbinde neu..."))
+        try:
+            self["status_lbl"].instance.setForegroundColor(gRGB(0xff, 0xff, 0xff))
+        except Exception:
+            pass
+        self["key_red"].setText("")
+        self["key_green"].setText("")
+        self["key_blue"].setText("")
+
+    def _start_settings_reconnect(self):
+        if not self._settings_reconnect_pending:
+            return
+        self._show_reconnecting()
+        if manager.is_connected():
+            if not self._dc_container.running():
+                self._dc_container.execute(manager.get_disconnect_cmd())
+        else:
+            self._reconnect_timer.start(100, True)
 
     def _finish_settings_reconnect(self):
         if not self._settings_reconnect_pending:
@@ -963,7 +1024,7 @@ class NordVPNMain(Screen):
         if not manager.has_auth():
             self.session.open(
                 MessageBox,
-                "Bitte zuerst die Service Credentials in den Einstellungen eintragen.",
+                to_native_str(u"Bitte zuerst die Service Credentials in den Einstellungen eintragen."),
                 MessageBox.TYPE_INFO,
                 timeout=5,
             )
@@ -971,7 +1032,7 @@ class NordVPNMain(Screen):
         if self._con_container.running():
             self.session.open(
                 MessageBox,
-                "Verbindungsaufbau l\xc3\xa4uft bereits.",
+                to_native_str(u"Verbindungsaufbau läuft bereits."),
                 MessageBox.TYPE_INFO,
                 timeout=3,
             )
@@ -980,13 +1041,7 @@ class NordVPNMain(Screen):
         self._skip_servers = []
         self._log_buf = ""
         self["log_lbl"].setText("Verbinde...")
-        self["status_lbl"].setText("Verbinde...")
-        try:
-            self["status_lbl"].instance.setForegroundColor(gRGB(0xff, 0xff, 0xff))
-        except Exception:
-            pass
-        self["key_red"].setText("")
-        self["key_green"].setText("")
+        self._show_connecting()
         self._con_container.execute(manager.get_connect_cmd())
 
     def _next_server(self):
@@ -1003,27 +1058,28 @@ class NordVPNMain(Screen):
             self._skip_servers.append(current)
         self._connecting = True
         self._log_buf = ""
-        self["log_lbl"].setText("Verbinde mit n\xc3\xa4chstem Server...")
-        self["status_lbl"].setText("Verbinde...")
-        try:
-            self["status_lbl"].instance.setForegroundColor(gRGB(0xff, 0xff, 0xff))
-        except Exception:
-            pass
-        self["key_red"].setText("")
-        self["key_green"].setText("")
-        self["key_blue"].setText("")
+        self["log_lbl"].setText(to_native_str(u"Verbinde mit nächstem Server..."))
+        self._show_connecting()
         self._con_container.execute(manager.get_connect_cmd_skip(self._skip_servers))
 
     def _disconnect(self):
         global _manual_disconnect
         if self._dc_container.running():
             return
+        if self._con_container.running():
+            # "Abbrechen": laufenden Verbindungsaufbau beenden, danach trennen
+            self._connect_cancelled = True
+            self._con_container.kill()
         self._log_buf = ""
         self["log_lbl"].setText("")
         self["status_lbl"].setText("Trenne...")
         self["key_red"].setText("")
         self["key_green"].setText("")
+        self["key_blue"].setText("")
         _manual_disconnect = True
+        self._settings_reconnect_pending = False
+        self._settings_debounce_timer.stop()
+        self._reconnect_timer.stop()
         self._dc_container.execute(manager.get_disconnect_cmd())
 
     def _open_settings(self):
@@ -1040,11 +1096,7 @@ class NordVPNMain(Screen):
             if result[0] == "reconnect":
                 self._open_settings_at(result[1])
                 self._settings_reconnect_pending = True
-                if manager.is_connected():
-                    if not self._dc_container.running():
-                        self._dc_container.execute(manager.get_disconnect_cmd())
-                else:
-                    self._reconnect_timer.start(100, True)
+                self._settings_debounce_timer.start(3000, True)
                 return
         self._update_status()
         if manager.is_connected():
@@ -1068,28 +1120,76 @@ def main(session, **kwargs):
 
 _status_timer = None
 _last_vpn_status = None
+_initial_check_done = False
 _plugin_open = False
 _manual_disconnect = False
+_session = None
+
+
+def _start_background_connect():
+    # Verbindungsaufbau losgeloest vom Plugin-Screen; --daemon trennt den
+    # Prozess von Enigma2 und beendet eine bestehende Verbindung selbst
+    import subprocess
+    subprocess.Popen(
+        [PYTHON_BIN, "/usr/sbin/nordvpn-connect",
+         str(manager.get_country_id()),
+         manager.get_protocol(),
+         manager.get_server_type(),
+         "",
+         "--daemon"],
+    )
+
+
+def _popup(msg, msg_type, timeout):
+    try:
+        AddPopup(to_native_str(msg), msg_type, timeout=timeout, id="nordvpn_notify")
+    except Exception:
+        pass
+
+
+def _popup_connected():
+    msg = to_unicode(u"NordVPN verbunden")
+    srv = manager.get_current_server()
+    if srv:
+        msg += to_unicode(u" – ") + to_unicode(srv)
+    _popup(msg, MessageBox.TYPE_INFO, 5)
 
 
 def _check_vpn_status():
-    global _last_vpn_status, _manual_disconnect
-    current = manager.is_connected()
-    if _last_vpn_status is not None and current != _last_vpn_status:
-        if current and not _plugin_open:
-            srv = manager.get_current_server()
-            msg = to_unicode(u"NordVPN verbunden")
-            if srv:
-                msg += to_unicode(u" – ") + to_unicode(srv)
-            AddPopup(to_native_str(msg), MessageBox.TYPE_INFO, timeout=5, id="nordvpn_notify")
-        elif not _plugin_open and not _manual_disconnect:
-            AddPopup(to_native_str(u"NordVPN getrennt."), MessageBox.TYPE_WARNING, timeout=8, id="nordvpn_notify")
-        _manual_disconnect = False
-    _last_vpn_status = current
+    global _last_vpn_status, _initial_check_done, _manual_disconnect
+    try:
+        current = manager.is_connected()
+        if not _initial_check_done:
+            # Erster Check nach GUI-Start: bestehende Verbindung einmal melden
+            _initial_check_done = True
+            if current and not _plugin_open:
+                _popup_connected()
+        elif _last_vpn_status is not None and current != _last_vpn_status:
+            if not _plugin_open:
+                if current:
+                    _popup_connected()
+                elif not _manual_disconnect:
+                    _popup(u"NordVPN getrennt.", MessageBox.TYPE_WARNING, 8)
+            _manual_disconnect = False
+        _last_vpn_status = current
+    except Exception:
+        pass
+
+
+def sessionstart(reason, session, **kwargs):
+    global _session, _status_timer
+    if reason == 0:
+        _session = session
+        if _status_timer is None:
+            _status_timer = eTimer()
+            _status_timer.callback.append(_check_vpn_status)
+        _status_timer.start(8000, False)
+    else:
+        if _status_timer is not None:
+            _status_timer.stop()
 
 
 def autostart(reason, **kwargs):
-    global _status_timer
     if reason != 0:
         return
 
@@ -1098,8 +1198,14 @@ def autostart(reason, **kwargs):
     RESOLV_BACKUP = "/etc/resolv.conf.nordvpn.bak"
     if not manager.is_connected() and os.path.isfile(RESOLV_BACKUP):
         try:
-            import shutil
-            shutil.move(RESOLV_BACKUP, RESOLV_CONF)
+            with open(RESOLV_BACKUP) as f:
+                own = f.readline().strip() == "# NordVPN"
+            if own:
+                # Verfaelschte Sicherung (VPN-DNS), DHCP liefert das Original
+                os.remove(RESOLV_BACKUP)
+            else:
+                import shutil
+                shutil.move(RESOLV_BACKUP, RESOLV_CONF)
         except Exception:
             pass
 
@@ -1120,26 +1226,16 @@ def autostart(reason, **kwargs):
                     pass
     except Exception:
         pass
-    subprocess.Popen(["python", "/usr/sbin/nordvpn-watchdog"])
+    subprocess.Popen([PYTHON_BIN, "/usr/sbin/nordvpn-watchdog"])
     if manager.get_autostart():
-        subprocess.Popen(
-            ["python", "/usr/sbin/nordvpn-connect",
-             str(manager.get_country_id()),
-             manager.get_protocol(),
-             manager.get_server_type(),
-             "",
-             "--daemon"],
-        )
-    _status_timer = eTimer()
-    _status_timer.callback.append(_check_vpn_status)
-    _status_timer.start(5000, False)
+        _start_background_connect()
 
 
 def Plugins(**kwargs):
     return [
         PluginDescriptor(
             name="NordVPN",
-            description="NordVPN Client f\xc3\xbcr Enigma2",
+            description=to_native_str(u"NordVPN Client für Enigma2"),
             where=PluginDescriptor.WHERE_PLUGINMENU,
             icon="plugin.png",
             fnc=main,
@@ -1148,5 +1244,10 @@ def Plugins(**kwargs):
             name="NordVPN",
             where=PluginDescriptor.WHERE_AUTOSTART,
             fnc=autostart,
+        ),
+        PluginDescriptor(
+            name="NordVPN",
+            where=PluginDescriptor.WHERE_SESSIONSTART,
+            fnc=sessionstart,
         ),
     ]

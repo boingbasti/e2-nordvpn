@@ -1,8 +1,8 @@
-# NordVPN Plugin für Enigma2 (VU+ VTI)
+# NordVPN Plugin für Enigma2 (VTi und openATV)
 
-OpenVPN-basierter NordVPN-Client für Enigma2-Receiver mit VTI-Image.
+OpenVPN-basierter NordVPN-Client für Enigma2-Receiver mit VTi- oder openATV-Image.
 
-Entwickelt und getestet auf VU+-Receivern mit VTI 15 und VTI 16.
+Entwickelt und getestet auf VU+-Receivern mit VTi 15, VTi 16, openATV 7.6 und openATV 8.0. Eine IPK für beide Images (Python 2 und Python 3).
 
 Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
@@ -33,13 +33,16 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 - Automatische Serverwahl über die offizielle NordVPN-API
 - **Automatisches Überspringen kaputter Server** – lehnt ein von der API empfohlener Server die Zugangsdaten ab, probiert das Plugin selbstständig den nächsten Kandidaten, statt mit einer irreführenden Fehlermeldung aufzugeben
 - Unterstützung für **UDP** und **TCP**
-- **DNS-Leak-Schutz** – NordVPN-DNS wird beim Verbinden gesetzt und beim Trennen wiederhergestellt
-- **IPv6-Leak-Schutz** – IPv6 wird für die Dauer der VPN-Verbindung deaktiviert
+- **P2P-Server** wählbar (Server-Typ Standard oder P2P)
+- **DNS-Leak-Schutz** – der gewählte DNS-Server (NordVPN, Google oder Cloudflare) wird beim Verbinden gesetzt und der eigene DNS beim Trennen wiederhergestellt
+- **IPv6-Leak-Schutz** – IPv6 wird für die Dauer der VPN-Verbindung deaktiviert; beim Trennen gilt wieder die Netzwerkeinstellung des Images (z. B. „Nur IPv4“ unter openATV)
 - **Watchdog-Daemon** – erkennt abgestürzte Verbindungen und reconnectet automatisch (in den ersten 2 Minuten nach einem Verbindungsversuch alle 10 Sekunden, danach alle 60 Sekunden); merkt sich dabei kaputte Server und meidet sie bei künftigen automatischen Reconnects
 - **OSD-Benachrichtigungen** bei Verbindungsauf- und -abbau (nur wenn das Plugin geschlossen ist); die Getrennt-Meldung enthält einen Hinweis auf den automatischen Reconnect
 - **Nächster Server** – bei bestehender Verbindung wechselt die Blaue Taste direkt zum nächstbesten Server der NordVPN-API (aktueller und bereits bekannte kaputte Server werden übersprungen)
 - **Mediathek-Fix** – behebt Verbindungsfehler bei ARD (Event 2), ZDF, 3sat, ZDFinfo, ZDFneo, Phoenix und RBB durch Vorabauflösung der betroffenen Akamai-CDN-Hostnamen
 - **Eigene OpenVPN-Config** – wer eine Dedicated-IP oder einen festen Server nutzen möchte, kann eine eigene `.ovpn`-Datei unter `/etc/openvpn/nordvpn_custom.ovpn` hinterlegen und in den Einstellungen aktivieren
+- **Auto-Reconnect bei Einstellungsänderungen** – Land, Protokoll, Server-Typ, DNS oder Mediathek-Fix ändern verbindet automatisch neu; beim Durchschalten mehrerer Werte nur einmal mit dem zuletzt gewählten
+- **Verbindungsaufbau abbrechen** – während das Plugin verbindet, bricht die Rote Taste den Vorgang ab
 - **Autostart** beim Hochfahren der Box (optional)
 - **Zuletzt gewählte Länder** werden oben in der Länderliste angezeigt
 
@@ -47,8 +50,8 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 ## Voraussetzungen
 
-- VU+ Receiver mit **VTI 15 oder VTI 16**
-- OpenVPN installiert: `opkg install openvpn`
+- VU+ Receiver mit **VTi 15, VTi 16 oder openATV**
+- OpenVPN (wird bei der Installation als Abhängigkeit aus dem Image-Feed nachinstalliert, falls noch nicht vorhanden)
 - Ein NordVPN-Konto mit **Service Credentials**
 
 > **Wichtig:** Es werden nicht die normalen Login-Daten benötigt, sondern die manuellen Service Credentials.  
@@ -58,16 +61,13 @@ Dieses Projekt steht unter der [GNU General Public License v2.0](LICENSE).
 
 ## Installation
 
-Die aktuelle Version als ZIP-Archiv von der [Releases-Seite](../../releases/latest) herunterladen, entpacken und per SSH auf die Box übertragen:
+Die aktuelle IPK von der [Releases-Seite](../../releases/latest) herunterladen, per FTP nach `/tmp` auf die Box kopieren und per SSH installieren:
 
 ```sh
-unzip enigma2-plugin-extensions-nordvpn_*.zip
-
-cat enigma2-plugin-extensions-nordvpn_*_all.ipk | ssh root@<BOX-IP> "cat > /tmp/nordvpn.ipk"
-ssh root@<BOX-IP> "opkg install /tmp/nordvpn.ipk"
+opkg install /tmp/enigma2-plugin-extensions-nordvpn_*_all.ipk
 ```
 
-Das Plugin installiert sich vollständig – Berechtigungen werden automatisch gesetzt, der Watchdog-Daemon wird beim nächsten Verbinden gestartet.
+Das Plugin installiert sich vollständig – Berechtigungen werden automatisch gesetzt und der Watchdog-Daemon wird gestartet. Bei einem Update wird eine bestehende Verbindung getrennt, DNS und IPv6 werden wiederhergestellt; Zugangsdaten und Einstellungen bleiben erhalten.
 
 Das Plugin erscheint nach einem Neustart von Enigma2 im Menü unter **Plugins → NordVPN**.
 
@@ -128,12 +128,12 @@ Wenn aktiviert, verbindet das Plugin automatisch beim Starten der Box.
 | Taste | Funktion |
 |-------|----------|
 | Grün | Verbinden |
-| Rot | Trennen |
+| Rot | Trennen (während des Verbindungsaufbaus: Abbrechen) |
 | Gelb | Einstellungen |
 | Blau | Nächster Server (nur bei aktiver Verbindung) |
 | Exit / Back | Plugin schließen |
 
-Das Hauptfenster zeigt: Verbindungsstatus, aktueller Server, externe IP, Land, Protokoll, Stadt, Session-Traffic (DL/UL) und Verbindungsdauer – alles wird regelmäßig aktualisiert.
+Das Hauptfenster zeigt: Verbindungsstatus, aktueller Server, externe IP, Land, Protokoll, DNS-Server, Stadt, Session-Traffic (DL/UL) und Verbindungsdauer – alles wird regelmäßig aktualisiert.
 
 ---
 
@@ -141,11 +141,11 @@ Das Hauptfenster zeigt: Verbindungsstatus, aktueller Server, externe IP, Land, P
 
 ### DNS-Leak-Schutz
 
-Beim Verbinden werden die NordVPN-eigenen DNS-Server gesetzt (`103.86.96.100`, `103.86.99.100`) und die ursprüngliche Konfiguration gesichert. Beim Trennen wird sie automatisch wiederhergestellt.
+Beim Verbinden wird der in den Einstellungen gewählte DNS-Server gesetzt (Standard: NordVPN mit `103.86.96.100` und `103.86.99.100`, alternativ Google oder Cloudflare) und die ursprüngliche Konfiguration gesichert. Beim Trennen wird sie automatisch wiederhergestellt.
 
 ### IPv6-Leak-Schutz
 
-IPv6 wird für die Dauer der VPN-Verbindung systemweit deaktiviert und beim Trennen wiederhergestellt. So kann kein Traffic an der VPN-Verbindung vorbeifließen.
+IPv6 wird für die Dauer der VPN-Verbindung systemweit deaktiviert. So kann kein Traffic an der VPN-Verbindung vorbeifließen. Beim Trennen wird IPv6 so gesetzt, wie es das Image beim Booten selbst tun würde – unter openATV bleibt IPv6 also aus, wenn in den Netzwerkeinstellungen „Nur IPv4“ aktiv ist.
 
 ### Watchdog
 
@@ -158,14 +158,10 @@ Beim manuellen Trennen über das Plugin wird der Watchdog beendet – es erfolgt
 ## Deinstallation
 
 ```sh
-# IPK auf die Box kopieren (falls nicht mehr vorhanden, aus dem Release-ZIP)
-cat enigma2-plugin-extensions-nordvpn_*_all.ipk | ssh root@<BOX-IP> "cat > /tmp/nordvpn.ipk"
-
-# Paket registrieren und vollständig entfernen
-ssh root@<BOX-IP> "opkg install --force-reinstall /tmp/nordvpn.ipk && opkg remove enigma2-plugin-extensions-nordvpn"
+opkg remove enigma2-plugin-extensions-nordvpn
 ```
 
-Das Deinstallations-Skript räumt vollständig auf: Watchdog und OpenVPN werden beendet, alle Konfigurationsdateien und Logdateien werden gelöscht, die **Credentials werden entfernt**.
+Das Deinstallations-Skript räumt vollständig auf: Eine bestehende Verbindung wird getrennt, DNS und IPv6 werden wiederhergestellt, Watchdog und OpenVPN beendet, alle Konfigurations- und Logdateien gelöscht und die **Credentials entfernt**.
 
 ---
 
@@ -181,4 +177,4 @@ Alle Quelldateien müssen im Projektordner vorhanden sein. Das fertige IPK wird 
 
 ### Hinweise zur Kompatibilität
 
-Das Plugin setzt Python 2.7 und die Enigma2-Python-API (VTI-Image) voraus. Es wurde ausschließlich auf VTI 15 getestet. Andere Enigma2-Images oder Python-3-Umgebungen werden nicht unterstützt.
+Der Code läuft unter Python 2.7 (VTi) und Python 3 (openATV) und nutzt die Enigma2-Python-API. Getestet wurde auf VTi 15, VTi 16, openATV 7.6 (Python 3.13) und openATV 8.0 (Python 3.14). Andere Enigma2-Images können funktionieren, sind aber nicht getestet.

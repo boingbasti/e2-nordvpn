@@ -12,7 +12,7 @@ try:
         timeout=15,
     )
     data = resp.read()
-    with open("/tmp/nordvpn_countries.json", "w") as f:
+    with open("/tmp/nordvpn_countries.json", "wb") as f:
         f.write(data)
     sys.exit(0)
 except Exception as e:

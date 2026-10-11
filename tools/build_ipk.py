@@ -37,18 +37,61 @@ chmod +x /usr/sbin/nordvpn-connect \\
          /usr/sbin/nordvpn-fetch-countries \\
          /usr/sbin/nordvpn-watchdog \\
          /usr/sbin/nordvpn-webif
-rm -f /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/*.pyo
+rm -f /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/*.pyo /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/*.pyc
+rm -rf /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/__pycache__
+# Alte generierte Config entfernen, sonst startet /etc/init.d/openvpn sie beim Booten
+rm -f /etc/openvpn/nordvpn.conf
 modprobe tun 2>/dev/null || true
 if [ -d /etc/modules-load.d ]; then
     echo "tun" > /etc/modules-load.d/tun.conf
 elif [ -f /etc/modules ] && ! grep -q "^tun" /etc/modules; then
     echo "tun" >> /etc/modules
 fi
-WDOG_PID=/var/run/nordvpn-watchdog.pid
-if [ -f "$WDOG_PID" ] && [ -d "/proc/$(cat $WDOG_PID 2>/dev/null)" ]; then
-    exit 0
+# Aufraeumen nach dem prerm von Versionen bis 1.9.8: Es beendet eine laufende
+# Verbindung hart, loescht die DNS-Sicherung und laesst VPN-DNS, abgeschaltetes
+# IPv6 und die Mediathek-Fix-Eintraege in /etc/hosts zurueck.
+nordvpn_openvpn_running() {
+    for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+        ARG0=$(tr '\\0' '\\n' 2>/dev/null < "/proc/$pid/cmdline" | sed -n 1p)
+        if [ "$ARG0" = "/usr/sbin/openvpn" ] && \\
+           grep -qE "/etc/openvpn/nordvpn\\.(ovpn|conf)" "/proc/$pid/cmdline" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+# Ein gerade per Signal beendetes OpenVPN braucht evtl. einen Moment
+i=0
+while nordvpn_openvpn_running && [ $i -lt 5 ]; do
+    sleep 1
+    i=$((i+1))
+done
+if ! nordvpn_openvpn_running && [ "$(head -n1 /etc/resolv.conf 2>/dev/null)" = "# NordVPN" ]; then
+    /usr/sbin/nordvpn-disconnect >/dev/null 2>&1 || true
+    # VTi (openresolv): Original-DNS aus den DHCP-Daten neu erzeugen. openATV hat
+    # kein resolvconf, dort setzt DHCP die Nameserver beim naechsten Boot neu.
+    if command -v resolvconf >/dev/null 2>&1; then
+        resolvconf -u >/dev/null 2>&1 || true
+    fi
 fi
-python /usr/sbin/nordvpn-watchdog &
+# Laufenden Watchdog (ggf. alte Version) beenden und neu starten, damit nach
+# einem Update nicht bis zum naechsten Enigma2-Neustart alter Code weiterlaeuft
+# Nur echte Watchdog-Prozesse (python + Skriptpfad als erstes Argument), nicht
+# jede Shell, in deren Kommandozeile der Name zufaellig vorkommt
+for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+    ARG0=$(tr '\\0' '\\n' 2>/dev/null < "/proc/$pid/cmdline" | sed -n 1p)
+    ARG1=$(tr '\\0' '\\n' 2>/dev/null < "/proc/$pid/cmdline" | sed -n 2p)
+    case "$ARG0" in
+        *python*)
+            if [ "$ARG1" = "/usr/sbin/nordvpn-watchdog" ]; then
+                kill "$pid" 2>/dev/null
+            fi
+            ;;
+    esac
+done
+rm -f /var/run/nordvpn-watchdog.pid
+PYTHON_BIN=$(command -v python 2>/dev/null || command -v python3 2>/dev/null || echo "python")
+$PYTHON_BIN /usr/sbin/nordvpn-watchdog &
 """
 
 PRERM_SCRIPT = """\
@@ -57,22 +100,22 @@ if [ -f /var/run/nordvpn-watchdog.pid ]; then
     kill "$(cat /var/run/nordvpn-watchdog.pid 2>/dev/null)" 2>/dev/null || true
     rm -f /var/run/nordvpn-watchdog.pid
 fi
-if [ -f /var/run/openvpn.nordvpn.pid ]; then
-    kill "$(cat /var/run/openvpn.nordvpn.pid 2>/dev/null)" 2>/dev/null || true
-    rm -f /var/run/openvpn.nordvpn.pid
+# Sauber trennen: stellt DNS und IPv6 wieder her, statt die Sicherungen zu
+# verwerfen und die Box mit VPN-DNS und abgeschaltetem IPv6 zurueckzulassen
+if [ -x /usr/sbin/nordvpn-disconnect ]; then
+    /usr/sbin/nordvpn-disconnect >/dev/null 2>&1 || true
 fi
+rm -f /var/run/openvpn.nordvpn.pid
 if [ -f /var/run/nordvpn-webif.pid ]; then
     kill "$(cat /var/run/nordvpn-webif.pid 2>/dev/null)" 2>/dev/null || true
     rm -f /var/run/nordvpn-webif.pid
 fi
-rm -f /etc/openvpn/nordvpn.conf
+rm -f /etc/openvpn/nordvpn.ovpn /etc/openvpn/nordvpn.conf
 rm -f /var/log/nordvpn.log
 rm -f /tmp/nordvpn_server.txt
 rm -f /tmp/nordvpn_countries.json
 rm -f /tmp/nordvpn_session
 rm -f /tmp/nordvpn_extip.txt
-rm -f /etc/resolv.conf.nordvpn.bak
-rm -f /tmp/nordvpn_ipv6_states
 if [ "$1" != "upgrade" ]; then
     rm -f /etc/openvpn/nordvpn_auth.txt
     rm -f /etc/enigma2/nordvpn.conf

@@ -1,10 +1,34 @@
 # -*- coding: utf-8 -*-
 import os
+import sys
 import json
 try:
     import ConfigParser
 except ImportError:
     import configparser as ConfigParser
+
+PY3 = sys.version_info[0] >= 3
+
+# Interpreter fuer Hintergrundprozesse: derselbe wie der von Enigma2.
+# sys.executable ist im eingebetteten Interpreter von Enigma2 nicht verlaesslich.
+PYTHON_BIN = "python3" if PY3 else "python"
+
+
+def _to_str(val):
+    if val is None:
+        return ""
+    if PY3:
+        if isinstance(val, bytes):
+            return val.decode("utf-8", "ignore")
+        s = str(val)
+        if (s.startswith("b'") and s.endswith("'")) or (s.startswith('b"') and s.endswith('"')):
+            return s[2:-1]
+        return s
+    else:
+        if isinstance(val, unicode):
+            return val.encode("utf-8")
+        return str(val)
+
 
 CONFIG_FILE = "/etc/enigma2/nordvpn.conf"
 AUTH_FILE = "/etc/openvpn/nordvpn_auth.txt"
@@ -29,7 +53,7 @@ class NordVPNManager(object):
     @property
     def cfg(self):
         if self._cfg is None:
-            self._cfg = ConfigParser.SafeConfigParser()
+            self._cfg = ConfigParser.RawConfigParser()
             self._cfg.read(CONFIG_FILE)
             if not self._cfg.has_section("nordvpn"):
                 self._cfg.add_section("nordvpn")
@@ -38,16 +62,18 @@ class NordVPNManager(object):
     def _get(self, key, default=""):
         try:
             val = self.cfg.get("nordvpn", key)
-            if isinstance(val, unicode):
-                return val.encode("utf-8")
-            return val
+            return _to_str(val)
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
-            return default
+            return _to_str(default)
 
     def _set(self, key, value):
-        if isinstance(value, unicode):
-            value = value.encode("utf-8")
-        self.cfg.set("nordvpn", key, str(value))
+        self.cfg.set("nordvpn", key, _to_str(value))
+        cfg_dir = os.path.dirname(CONFIG_FILE)
+        if cfg_dir and not os.path.isdir(cfg_dir):
+            try:
+                os.makedirs(cfg_dir)
+            except Exception:
+                pass
         with open(CONFIG_FILE, "w") as f:
             self.cfg.write(f)
 
@@ -62,7 +88,13 @@ class NordVPNManager(object):
 
     def set_country(self, country_id, country_name):
         self.cfg.set("nordvpn", "country_id", str(country_id))
-        self.cfg.set("nordvpn", "country_name", country_name)
+        self.cfg.set("nordvpn", "country_name", _to_str(country_name))
+        cfg_dir = os.path.dirname(CONFIG_FILE)
+        if cfg_dir and not os.path.isdir(cfg_dir):
+            try:
+                os.makedirs(cfg_dir)
+            except Exception:
+                pass
         with open(CONFIG_FILE, "w") as f:
             self.cfg.write(f)
 
@@ -178,7 +210,7 @@ class NordVPNManager(object):
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 ip = socket.inet_ntoa(fcntl.ioctl(
                     s.fileno(), 0x8915,
-                    struct.pack("256s", iface[:15])
+                    struct.pack("256s", iface[:15].encode("ascii"))
                 )[20:24])
                 s.close()
                 if ip and ip != "127.0.0.1":
@@ -194,7 +226,7 @@ class NordVPNManager(object):
         import subprocess
         devnull = open(os.devnull, "w")
         subprocess.Popen(
-            ["python", WEBIF_CMD, str(WEBIF_PORT)],
+            [PYTHON_BIN, WEBIF_CMD, str(WEBIF_PORT)],
             stdout=devnull, stderr=devnull,
         )
 

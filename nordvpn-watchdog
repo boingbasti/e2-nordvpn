@@ -32,8 +32,28 @@ def is_vpn_connected():
         return False
 
 
+def is_connect_running():
+    # Laeuft bereits ein Verbindungsaufbau (Autostart, Plugin oder eigener
+    # Reconnect), keinen zweiten starten - sonst entstehen parallele Tunnel.
+    own = str(os.getpid())
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit() or entry == own:
+                continue
+            try:
+                with open("/proc/%s/cmdline" % entry) as f:
+                    cmdline = f.read()
+            except Exception:
+                continue
+            if CONNECT_CMD in cmdline:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def read_config():
-    cfg = ConfigParser.SafeConfigParser()
+    cfg = ConfigParser.RawConfigParser()
     cfg.read(CONFIG_FILE)
     try:
         country_id = cfg.get("nordvpn", "country_id")
@@ -122,10 +142,12 @@ def main():
                 continue
             if reconnect_proc is not None and reconnect_proc.poll() is None:
                 continue
+            if is_connect_running():
+                continue
             add_failed_server()
             country_id, proto, server_type = read_config()
             skip = read_skip_list()
-            reconnect_proc = subprocess.Popen(["python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
+            reconnect_proc = subprocess.Popen([sys.executable or "python", CONNECT_CMD, country_id, proto, server_type, ",".join(skip)])
             start_time = time.time()
         except Exception:
             _log_error()

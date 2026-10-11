@@ -9,6 +9,10 @@ try:
     import urllib2
 except ImportError:
     import urllib.request as urllib2
+try:
+    import ConfigParser
+except ImportError:
+    import configparser as ConfigParser
 import json
 import subprocess
 import time
@@ -20,7 +24,10 @@ PROTO        = _pos_args[1] if len(_pos_args) > 1 else "udp"
 SERVER_TYPE  = _pos_args[2] if len(_pos_args) > 2 else "standard"
 SKIP_HOSTS   = [h for h in _pos_args[3].split(",") if h] if len(_pos_args) > 3 else []
 AUTH_FILE    = "/etc/openvpn/nordvpn_auth.txt"
-OVPN_CONFIG  = "/etc/openvpn/nordvpn.conf"
+# Bewusst nicht *.conf: /etc/init.d/openvpn startet beim Booten jede *.conf
+# in /etc/openvpn selbst, das ergab zusammen mit dem Autostart zwei Tunnel.
+OVPN_CONFIG  = "/etc/openvpn/nordvpn.ovpn"
+LEGACY_OVPN_CONFIG = "/etc/openvpn/nordvpn.conf"
 PID_FILE     = "/var/run/openvpn.nordvpn.pid"
 LOG_FILE     = "/var/log/nordvpn.log"
 CONNECT_LOG_FILE = "/var/log/nordvpn-connect.log"
@@ -57,11 +64,7 @@ def log(msg):
 
 def _get_streaming_fix():
     try:
-        try:
-            import ConfigParser
-        except ImportError:
-            import configparser as ConfigParser
-        cfg = ConfigParser.SafeConfigParser()
+        cfg = ConfigParser.RawConfigParser()
         cfg.read(CONFIG_FILE)
         return cfg.get("nordvpn", "streaming_fix") == "1"
     except Exception:
@@ -70,11 +73,7 @@ def _get_streaming_fix():
 
 def _is_custom_ovpn_enabled():
     try:
-        try:
-            import ConfigParser
-        except ImportError:
-            import configparser as ConfigParser
-        cfg = ConfigParser.SafeConfigParser()
+        cfg = ConfigParser.RawConfigParser()
         cfg.read(CONFIG_FILE)
         return cfg.get("nordvpn", "custom_ovpn") == "1"
     except Exception:
@@ -111,11 +110,7 @@ def _pre_resolve_cdn():
 
 def _get_dns_servers():
     try:
-        try:
-            import ConfigParser
-        except ImportError:
-            import configparser as ConfigParser
-        cfg = ConfigParser.SafeConfigParser()
+        cfg = ConfigParser.RawConfigParser()
         cfg.read(CONFIG_FILE)
         try:
             dns_type = cfg.get("nordvpn", "dns_type")
@@ -132,10 +127,23 @@ def _get_dns_servers():
         return ["103.86.96.100", "103.86.99.100"]
 
 
+def _is_own_resolv(path):
+    # Vom Plugin geschriebene resolv.conf beginnt mit "# NordVPN"
+    try:
+        with open(path) as f:
+            return f.readline().strip() == "# NordVPN"
+    except Exception:
+        return False
+
+
 def _set_dns():
     try:
         import shutil
-        if not os.path.isfile(RESOLV_BACKUP):
+        if os.path.isfile(RESOLV_BACKUP) and _is_own_resolv(RESOLV_BACKUP):
+            # Sicherung enthaelt VPN-DNS statt des Originals, unbrauchbar
+            os.remove(RESOLV_BACKUP)
+            log("WARNING: Ungueltige DNS-Sicherung verworfen")
+        if not os.path.isfile(RESOLV_BACKUP) and not _is_own_resolv(RESOLV_CONF):
             shutil.copy2(RESOLV_CONF, RESOLV_BACKUP)
         dns_servers = _get_dns_servers()
         with open(RESOLV_CONF, "w") as f:
@@ -153,7 +161,7 @@ def _disable_ipv6():
         save_states = not os.path.isfile("/tmp/nordvpn_ipv6_states")
         states = []
         for path in glob.glob("/proc/sys/net/ipv6/conf/*/disable_ipv6"):
-            iface = path.split("/")[5]
+            iface = path.split("/")[6]
             if iface != "lo":
                 try:
                     with open(path, "r") as f:
@@ -209,7 +217,7 @@ def _restart_watchdog():
     _kill_all_watchdogs()
     time.sleep(0.5)
     devnull = open(os.devnull, "w")
-    subprocess.Popen(["python", WATCHDOG_CMD], stdout=devnull, stderr=devnull)
+    subprocess.Popen([sys.executable or "python", WATCHDOG_CMD], stdout=devnull, stderr=devnull)
 
 
 def _find_openvpn_pids():
@@ -223,7 +231,7 @@ def _find_openvpn_pids():
                     cmdline = f.read()
             except Exception:
                 continue
-            if "openvpn" in cmdline and OVPN_CONFIG in cmdline:
+            if "openvpn" in cmdline and (OVPN_CONFIG in cmdline or LEGACY_OVPN_CONFIG in cmdline):
                 pids.append(entry)
     except Exception:
         pass
@@ -231,7 +239,7 @@ def _find_openvpn_pids():
 
 
 def stop_existing():
-    # Killt alle laufenden OpenVPN-Prozesse mit unserer Config, nicht nur die
+    # Killt alle laufenden OpenVPN-Prozesse mit der Plugin-Config, nicht nur die
     # PID aus der Datei - verhindert verwaiste Tunnel nach einem unsauberen
     # E2-Neustart oder Race zwischen mehreren Connect-Versuchen.
     pids = _find_openvpn_pids()
@@ -244,6 +252,10 @@ def stop_existing():
         log("Stopping %d existing connection(s)..." % len(pids))
         time.sleep(2)
     try:
+        os.remove(LEGACY_OVPN_CONFIG)
+    except Exception:
+        pass
+    try:
         os.remove(PID_FILE)
     except Exception:
         pass
@@ -251,7 +263,10 @@ def stop_existing():
 
 def fetch(url, timeout=15):
     req = urllib2.urlopen(url, timeout=timeout)
-    return req.read()
+    data = req.read()
+    if isinstance(data, bytes):
+        data = data.decode("utf-8", "ignore")
+    return data
 
 
 def get_best_server():
@@ -300,6 +315,8 @@ def attempt_connect(server=None, custom_path=None):
         try:
             with open(custom_path, "rb") as f:
                 ovpn = f.read()
+            if isinstance(ovpn, bytes):
+                ovpn = ovpn.decode("utf-8", "ignore")
         except Exception as e:
             log("ERROR: Eigene Config nicht lesbar (%s)" % str(e))
             return False
@@ -316,7 +333,7 @@ def attempt_connect(server=None, custom_path=None):
             _record_failed_server(server)
             return False
 
-    # Strip directives we override so there are no duplicates
+    # Strip directives that are set below so there are no duplicates
     clean_lines = [
         l for l in ovpn.splitlines()
         if not l.strip().startswith("auth-user-pass")
@@ -397,7 +414,7 @@ def attempt_connect(server=None, custom_path=None):
             return False
 
         if "Initialization Sequence Completed" in new_log:
-            log("SUCCESS: OpenVPN started, connecting to %s" % server)
+            log("SUCCESS: OpenVPN started, connecting to %s" % (server or "Eigene Config"))
             success = True
             break
 
