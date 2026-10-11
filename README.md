@@ -155,6 +155,20 @@ Beim manuellen Trennen über das Plugin wird der Watchdog beendet – es erfolgt
 
 ---
 
+## Hilfsplugin: Meine externe IP
+
+Zum Prüfen der VPN-Verbindung gibt es ein kleines separates Plugin, das die externe IPv4- und IPv6-Adresse sowie die aktiven DNS-Server anzeigt. Es läuft unter VTi und openATV und funktioniert auch eigenständig ohne das NordVPN-Plugin.
+
+Die IPK `enigma2-plugin-extensions-meineexterneip_1.1_all.ipk` liegt beim Release [v2.0.0](../../releases/tag/v2.0.0) und wird genauso installiert:
+
+```sh
+opkg install /tmp/enigma2-plugin-extensions-meineexterneip_1.1_all.ipk
+```
+
+Nach einem Neustart von Enigma2 erscheint es im Menü unter **Plugins → Meine externe IP**.
+
+---
+
 ## Deinstallation
 
 ```sh
