@@ -41,7 +41,10 @@ rm -f /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/*.pyo /usr/lib/enigma2/
 rm -rf /usr/lib/enigma2/python/Plugins/Extensions/NordVPN/__pycache__
 # Alte generierte Config entfernen, sonst startet /etc/init.d/openvpn sie beim Booten
 rm -f /etc/openvpn/nordvpn.conf
-modprobe tun 2>/dev/null || true
+# tun nur laden, wenn es fehlt, und modprobe mit vollem Pfad aufrufen: opkg faengt
+# ein einfaches "modprobe" ab und startet danach "depmod -a", das auf VTi 16 eine
+# harmlose, aber verwirrende Warnung zu modules.builtin.modinfo ausgibt
+[ -e /dev/net/tun ] || /sbin/modprobe tun 2>/dev/null || modprobe tun 2>/dev/null || true
 if [ -d /etc/modules-load.d ]; then
     echo "tun" > /etc/modules-load.d/tun.conf
 elif [ -f /etc/modules ] && ! grep -q "^tun" /etc/modules; then

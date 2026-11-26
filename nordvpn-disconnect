@@ -81,9 +81,16 @@ PID_FILE="/var/run/openvpn.nordvpn.pid"
 # Killt alle laufenden OpenVPN-Prozesse mit der Plugin-Config, nicht nur die
 # PID aus der Datei - findet auch verwaiste Tunnel ohne (oder mit
 # veralteter) PID-Datei, z.B. nach einem unsauberen E2-Neustart.
+# Nur echte OpenVPN-Prozesse mit der Plugin-Config, nicht jede Shell, in deren
+# Kommandozeile die Pfade zufaellig vorkommen
+is_plugin_openvpn() {
+    [ "$(tr '\0' '\n' 2>/dev/null < "/proc/$1/cmdline" | sed -n 1p)" = "/usr/sbin/openvpn" ] && \
+        tr '\0' '\n' 2>/dev/null < "/proc/$1/cmdline" | grep -qxE "/etc/openvpn/nordvpn\.(ovpn|conf)"
+}
+
 KILLED=0
 for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
-    if grep -q "openvpn" "/proc/$pid/cmdline" 2>/dev/null && grep -qE "/etc/openvpn/nordvpn\.(ovpn|conf)" "/proc/$pid/cmdline" 2>/dev/null; then
+    if is_plugin_openvpn "$pid"; then
         kill "$pid" 2>/dev/null
         KILLED=1
     fi
@@ -92,7 +99,7 @@ done
 if [ "$KILLED" = "1" ]; then
     sleep 1
     for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
-        if grep -q "openvpn" "/proc/$pid/cmdline" 2>/dev/null && grep -qE "/etc/openvpn/nordvpn\.(ovpn|conf)" "/proc/$pid/cmdline" 2>/dev/null; then
+        if is_plugin_openvpn "$pid"; then
             kill -9 "$pid" 2>/dev/null
         fi
     done

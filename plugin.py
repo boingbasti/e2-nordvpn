@@ -723,6 +723,9 @@ class NordVPNMain(Screen):
         self._city_container.dataAvail.append(self._on_city_data)
         self._city_container.appClosed.append(self._on_city_done)
         self._city_buf = ""
+        # Land laut ip-api, wird bei eigener Config statt des eingestellten
+        # Landes angezeigt, denn dort bestimmt die Config den Server
+        self._live_country = ""
         self._session_rx_base = 0
         self._session_tx_base = 0
         self._connect_time = None
@@ -815,6 +818,7 @@ class NordVPNMain(Screen):
                     pass
                 self["ip_lbl"].setText("")
                 self["city_lbl"].setText("")
+                self._live_country = ""
                 self["transfer_lbl"].setText("")
             self._prev_connected = connected
         if connected:
@@ -846,10 +850,17 @@ class NordVPNMain(Screen):
             self["key_red"].setText("")
             self["key_green"].setText(to_native_str(u"Verbinden"))
             self["key_blue"].setText("")
+        self._update_country_lbl()
+
+    def _update_country_lbl(self):
+        if manager.get_custom_ovpn():
+            country = self._live_country or u"Eigene Config"
+        else:
+            country = to_unicode(manager.get_country_name())
         dns_names = {"nordvpn": u"NordVPN", "google": u"Google", "cloudflare": u"Cloudflare"}
         self["country_lbl"].setText(
             to_native_str(u"Land: %s  |  Protokoll: %s  |  DNS: %s" % (
-                to_unicode(manager.get_country_name()),
+                country,
                 to_unicode(manager.get_protocol().upper()),
                 dns_names.get(manager.get_dns_type(), u"NordVPN"),
             ))
@@ -875,7 +886,7 @@ class NordVPNMain(Screen):
         if manager.is_connected():
             self._city_buf = ""
             self._city_container.execute(
-                "wget -q -T 5 -O - 'http://ip-api.com/line/?fields=city'"
+                "wget -q -T 5 -O - 'http://ip-api.com/line/?fields=country,city'"
             )
 
     def _on_city_data(self, data):
@@ -887,9 +898,12 @@ class NordVPNMain(Screen):
         if self._connecting:
             return
         try:
-            city = self._city_buf.strip()
-            if retval == 0 and city:
-                self["city_lbl"].setText(to_native_str(city))
+            # Antwort: eine Zeile Land, eine Zeile Stadt
+            lines = [l.strip() for l in self._city_buf.strip().splitlines()]
+            if retval == 0 and len(lines) >= 2 and lines[1]:
+                self._live_country = to_unicode(lines[0])
+                self["city_lbl"].setText(to_native_str(lines[1]))
+                self._update_country_lbl()
         except Exception:
             pass
 
@@ -1219,7 +1233,10 @@ def autostart(reason, **kwargs):
                     _cmdline = _f.read()
             except Exception:
                 continue
-            if "nordvpn-watchdog" in _cmdline:
+            # Nur echte Watchdog-Prozesse (python + Skriptpfad als erstes Argument),
+            # nicht jede Shell, in deren Kommandozeile der Name zufaellig vorkommt
+            _args = _cmdline.split("\0")
+            if len(_args) > 1 and "python" in _args[0] and _args[1] == "/usr/sbin/nordvpn-watchdog":
                 try:
                     os.kill(int(_entry), 15)
                 except Exception:
@@ -1227,7 +1244,9 @@ def autostart(reason, **kwargs):
     except Exception:
         pass
     subprocess.Popen([PYTHON_BIN, "/usr/sbin/nordvpn-watchdog"])
-    if manager.get_autostart():
+    # Nach einem GUI-Neustart laeuft OpenVPN weiter. Ein erneuter Connect wuerde
+    # den bestehenden Tunnel beenden und auf einem anderen Server neu aufbauen.
+    if manager.get_autostart() and not manager.is_connected():
         _start_background_connect()
 
 

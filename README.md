@@ -121,6 +121,31 @@ Einstellungen → **Autostart** → OK oder Links/Rechts
 
 Wenn aktiviert, verbindet das Plugin automatisch beim Starten der Box.
 
+### 5. Eigene Config (optional)
+
+Für eine Dedicated IP oder einen festen Server lässt sich statt der automatischen Serverwahl eine eigene OpenVPN-Config verwenden.
+
+1. Die `.ovpn`-Datei als `/etc/openvpn/nordvpn_custom.ovpn` auf die Box kopieren, z. B. per FTP oder WinSCP.
+2. Einstellungen → **Eigene Config** → OK oder Links/Rechts auf **Ein** stellen. Eine bestehende Verbindung wird dabei automatisch mit der eigenen Config neu aufgebaut.
+
+Gut zu wissen:
+
+- Benutzername und Passwort kommen immer aus den hinterlegten Service Credentials. Eine `auth-user-pass`-Zeile in der Datei wird ersetzt, daher funktionieren nur NordVPN-Configs.
+- Land, Protokoll, Server-Typ und die Blaue Taste (Nächster Server) haben bei aktiver eigener Config keine Wirkung. DNS- und IPv6-Leak-Schutz, Mediathek-Fix und Watchdog gelten weiterhin.
+- Schlägt die Verbindung fehl, z. B. wegen abgelehnter Zugangsdaten oder eines nicht erreichbaren Servers, zeigt das Plugin eine Fehlermeldung.
+
+**Dedicated IP**
+
+Die Config aus dem NordVPN-Kundenbereich kann unverändert verwendet werden. Sie verbindet über UDP-Port 53. Auf diesem Port bricht der Tunnel ohne regelmäßigen Datenverkehr schon nach kurzer Zeit ab. Das Plugin erkennt Port 53 deshalb automatisch und sendet alle 5 Sekunden ein Lebenszeichen.
+
+Alternativ bietet NordVPN für denselben Server eine Config mit den UDP-Ports 1231 bis 1234 an, die ohne Port 53 auskommt:
+
+    https://downloads.nordcdn.com/configs/files/ovpn_udp/servers/<server>.nordvpn.com.udp.ovpn
+
+Den Servernamen enthält die Config aus dem Kundenbereich in der Zeile `verify-x509-name CN=<server>.nordvpn.com`, z. B. `de1234`. Die Ausgangsadresse ist bei beiden Varianten die Dedicated IP.
+
+Nur den Port in der Config aus dem Kundenbereich zu ändern, funktioniert nicht: Die beiden Varianten sichern den Steuerkanal unterschiedlich ab (`tls-crypt` bzw. `tls-auth`). Es muss immer die komplette Datei verwendet werden.
+
 ---
 
 ## Bedienung
@@ -149,7 +174,7 @@ IPv6 wird für die Dauer der VPN-Verbindung systemweit deaktiviert. So kann kein
 
 ### Watchdog
 
-Der Watchdog-Daemon läuft im Hintergrund und prüft alle 60 Sekunden, ob der OpenVPN-Prozess noch aktiv ist. Ist er abgestürzt, wird automatisch eine neue Verbindung aufgebaut. Der Watchdog erkennt den VPN-Zustand zuverlässig auch nach einem Plugin- oder E2-Neustart.
+Der Watchdog-Daemon läuft im Hintergrund und prüft alle 60 Sekunden, ob der OpenVPN-Prozess noch aktiv ist. Ist er abgestürzt, wird automatisch eine neue Verbindung aufgebaut. Außerdem prüft er, ob der Datenverkehr noch über den Tunnel geleitet wird. Fehlen die VPN-Routen, z. B. nach „Netzwerk neu starten“ in den Netzwerkeinstellungen, verbindet er ebenfalls neu, damit nichts ungeschützt am Tunnel vorbeiläuft. Der Watchdog erkennt den VPN-Zustand zuverlässig auch nach einem Plugin- oder E2-Neustart.
 
 Beim manuellen Trennen über das Plugin wird der Watchdog beendet – es erfolgt keine automatische Wiederverbindung.
 

@@ -17,6 +17,7 @@ SELF_PID    = "/var/run/nordvpn-watchdog.pid"
 SERVER_FILE = "/tmp/nordvpn_server.txt"
 SKIP_FILE   = "/tmp/nordvpn_watchdog_skip.txt"
 ERROR_LOG   = "/var/log/nordvpn-watchdog-error.log"
+CONNECT_LOG = "/var/log/nordvpn-connect.log"
 INTERVAL = 60
 FAST_INTERVAL = 10
 FAST_DURATION = 120
@@ -32,6 +33,36 @@ def is_vpn_connected():
         return False
 
 
+def read_vpn_pid():
+    try:
+        return open(PID_FILE).read().strip()
+    except Exception:
+        return ""
+
+
+def has_tunnel_route():
+    # Default-Route ueber ein tun-Interface: redirect-gateway def1 legt
+    # 0.0.0.0/1 und 128.0.0.0/1 an, ohne def1 ersetzt OpenVPN 0.0.0.0/0.
+    # Alle drei haben in /proc/net/route das Ziel 00000000.
+    try:
+        with open("/proc/net/route") as f:
+            for line in f.readlines()[1:]:
+                parts = line.split()
+                if len(parts) > 7 and parts[0].startswith("tun") and parts[1] == "00000000":
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def log(msg):
+    try:
+        with open(CONNECT_LOG, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except Exception:
+        pass
+
+
 def is_connect_running():
     # Laeuft bereits ein Verbindungsaufbau (Autostart, Plugin oder eigener
     # Reconnect), keinen zweiten starten - sonst entstehen parallele Tunnel.
@@ -45,7 +76,8 @@ def is_connect_running():
                     cmdline = f.read()
             except Exception:
                 continue
-            if CONNECT_CMD in cmdline:
+            args = cmdline.split("\0")
+            if len(args) > 1 and "python" in args[0] and args[1] == CONNECT_CMD:
                 return True
     except Exception:
         pass
@@ -128,19 +160,36 @@ def main():
     was_connected = is_vpn_connected()
     start_time = time.time()
     reconnect_proc = None
+    # PID der OpenVPN-Instanz, bei der die Tunnel-Route schon einmal da war.
+    # Erst dann gilt eine fehlende Route als Fehler, damit eigene Configs ohne
+    # Umleitung des gesamten Verkehrs keine Dauer-Reconnects ausloesen.
+    route_seen_pid = None
     while True:
         try:
             elapsed = time.time() - start_time
             interval = FAST_INTERVAL if elapsed < FAST_DURATION else INTERVAL
             time.sleep(interval)
+            if reconnect_proc is not None and reconnect_proc.poll() is None:
+                continue
             connected = is_vpn_connected()
             if connected:
                 was_connected = True
                 reconnect_proc = None
+                vpn_pid = read_vpn_pid()
+                if has_tunnel_route():
+                    route_seen_pid = vpn_pid
+                elif route_seen_pid == vpn_pid and not is_connect_running():
+                    # OpenVPN laeuft noch, aber Adresse und Routen des Tunnels
+                    # sind weg (z. B. nach "Netzwerk neu starten" im Image).
+                    # Der Verkehr liefe dann ungeschuetzt am Tunnel vorbei,
+                    # und OpenVPN merkt das selbst nicht.
+                    log("Watchdog: Tunnel-Routen fehlen (z.B. Netzwerk neu gestartet), verbinde neu")
+                    route_seen_pid = None
+                    country_id, proto, server_type = read_config()
+                    reconnect_proc = subprocess.Popen([sys.executable or "python", CONNECT_CMD, country_id, proto, server_type, ""])
+                    start_time = time.time()
                 continue
             if not was_connected:
-                continue
-            if reconnect_proc is not None and reconnect_proc.poll() is None:
                 continue
             if is_connect_running():
                 continue

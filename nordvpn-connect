@@ -204,7 +204,10 @@ def _kill_all_watchdogs():
                     cmdline = f.read()
             except Exception:
                 continue
-            if "nordvpn-watchdog" in cmdline:
+            # Nur echte Watchdog-Prozesse (python + Skriptpfad als erstes Argument),
+            # nicht jede Shell, in deren Kommandozeile der Name zufaellig vorkommt
+            args = cmdline.split("\0")
+            if len(args) > 1 and "python" in args[0] and args[1] == WATCHDOG_CMD:
                 try:
                     os.kill(int(entry), 15)
                 except Exception:
@@ -231,7 +234,10 @@ def _find_openvpn_pids():
                     cmdline = f.read()
             except Exception:
                 continue
-            if "openvpn" in cmdline and (OVPN_CONFIG in cmdline or LEGACY_OVPN_CONFIG in cmdline):
+            # Nur echte OpenVPN-Prozesse mit der Plugin-Config, nicht jede Shell,
+            # in deren Kommandozeile die Pfade zufaellig vorkommen
+            args = cmdline.split("\0")
+            if args[0] == "/usr/sbin/openvpn" and (OVPN_CONFIG in args or LEGACY_OVPN_CONFIG in args):
                 pids.append(entry)
     except Exception:
         pass
@@ -309,6 +315,32 @@ def _record_failed_server(hostname):
         f.write(",".join(skip))
 
 
+def _uses_udp_port_53(ovpn):
+    # Dedicated-IP-Server von NordVPN laufen ueber UDP Port 53. Ein solcher
+    # Tunnel verstummt nach rund 40 s ohne Verkehr dauerhaft, normale Server
+    # auf 1194 nicht. Erkannt wird Port 53 ueber "remote host port [proto]"
+    # oder "port", das Protokoll ueber "proto" oder das dritte remote-Feld.
+    proto = "udp"
+    port = "1194"
+    remotes = []
+    for line in ovpn.splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith(("#", ";")):
+            continue
+        if parts[0] == "proto" and len(parts) > 1:
+            proto = parts[1]
+        elif parts[0] == "port" and len(parts) > 1:
+            port = parts[1]
+        elif parts[0] == "remote" and len(parts) > 1:
+            remotes.append(parts[2:])
+    for r in remotes:
+        r_port = r[0] if len(r) > 0 else port
+        r_proto = r[1] if len(r) > 1 else proto
+        if r_port == "53" and r_proto.startswith("udp"):
+            return True
+    return False
+
+
 def attempt_connect(server=None, custom_path=None):
     if custom_path:
         log("Connecting with custom config: %s" % custom_path)
@@ -351,6 +383,15 @@ def attempt_connect(server=None, custom_path=None):
     ) % (AUTH_FILE, LOG_FILE)
     if PROTO == "udp":
         extra += "\nreplay-window 512 120"
+    if _uses_udp_port_53(ovpn_clean):
+        # Server-Vorgabe ping 60 ist dafuer zu selten. pull-filter verwirft
+        # auch das gepushte ping-restart, daher den Serverwert 180 selbst setzen.
+        log("UDP Port 53 erkannt, Keepalive alle 5 s")
+        extra += (
+            "\npull-filter ignore \"ping\""
+            "\nping 5"
+            "\nping-restart 180"
+        )
     config = ovpn_clean + extra + "\n"
 
     with open(OVPN_CONFIG, "w") as f:
@@ -400,7 +441,10 @@ def attempt_connect(server=None, custom_path=None):
             pass
 
         if "AUTH_FAILED" in new_log:
-            log("Server %s lehnt Zugangsdaten ab, versuche naechsten Server..." % server)
+            if server:
+                log("Server %s lehnt Zugangsdaten ab, versuche naechsten Server..." % server)
+            else:
+                log("ERROR: Zugangsdaten abgelehnt (AUTH_FAILED), Service Credentials in den Einstellungen pruefen")
             if pid_active and pid:
                 try:
                     os.kill(int(pid), 15)
@@ -410,7 +454,8 @@ def attempt_connect(server=None, custom_path=None):
                 os.remove(PID_FILE)
             except Exception:
                 pass
-            _record_failed_server(server)
+            if server:
+                _record_failed_server(server)
             return False
 
         if "Initialization Sequence Completed" in new_log:
@@ -507,7 +552,9 @@ def main():
         if not os.path.isfile(CUSTOM_OVPN_FILE):
             log("ERROR: Eigene Config aktiviert, aber Datei nicht gefunden: %s" % CUSTOM_OVPN_FILE)
             sys.exit(1)
-        attempt_connect(custom_path=CUSTOM_OVPN_FILE)
+        # Ohne Exit-Code 1 zeigt das Plugin bei einem Fehlschlag keine Fehlerbox
+        if not attempt_connect(custom_path=CUSTOM_OVPN_FILE):
+            sys.exit(1)
         return
 
     for attempt in range(MAX_ATTEMPTS):
